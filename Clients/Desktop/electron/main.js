@@ -1,6 +1,10 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
 
+// Chromium GPU child-process crashes are usually driver/environment issues.
+// Disable hardware acceleration so the desktop shell can start reliably.
+app.disableHardwareAcceleration();
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1480,

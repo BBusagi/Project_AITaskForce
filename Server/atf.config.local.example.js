@@ -2,7 +2,7 @@ module.exports = {
   providers: {
     openai: {
       apiKey: "sk-your-openai-key",
-      models: ["gpt-4.1", "gpt-4.1-mini"],
+      models: ["gpt-5.4-2026-03-05", "gpt-4.1", "gpt-4.1-mini"],
     },
     anthropic: {
       apiKey: "sk-ant-your-anthropic-key",
@@ -13,19 +13,19 @@ module.exports = {
     routes: {
       leader: {
         provider: "openai",
-        model: "gpt-4.1",
+        model: "gpt-5.4-2026-03-05",
       },
       planner: {
         provider: "openai",
-        model: "gpt-4.1-mini",
+        model: "gpt-5.4-2026-03-05",
       },
       writer: {
-        provider: "ollama",
-        model: "qwen3:8b",
+        provider: "openai",
+        model: "gpt-5.4-2026-03-05",
       },
       reviewer: {
-        provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        provider: "openai",
+        model: "gpt-5.4-2026-03-05",
       },
     },
   },

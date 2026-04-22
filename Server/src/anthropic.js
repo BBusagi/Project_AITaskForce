@@ -51,6 +51,13 @@ function readOutputText(result) {
     .trim();
 }
 
+function toAnthropicMessages(messages) {
+  return messages.map((message) => ({
+    role: message.role === "assistant" ? "assistant" : "user",
+    content: message.content,
+  }));
+}
+
 async function generate(model, prompt) {
   const result = await anthropicRequest("/v1/messages", {
     method: "POST",
@@ -73,8 +80,27 @@ async function generate(model, prompt) {
   };
 }
 
+async function generateConversation(model, messages, instruction) {
+  const result = await anthropicRequest("/v1/messages", {
+    method: "POST",
+    body: JSON.stringify({
+      model,
+      max_tokens: 1024,
+      system: instruction,
+      messages: toAnthropicMessages(messages),
+    }),
+  });
+
+  return {
+    provider: "anthropic",
+    model,
+    text: readOutputText(result),
+  };
+}
+
 module.exports = {
   isConfigured,
   listModels,
   generate,
+  generateConversation,
 };

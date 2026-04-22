@@ -581,6 +581,36 @@ h3 {
   gap: 12px;
 }
 
+.chat-thread-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.chat-thread-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chat-thread-stream {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+  padding: 18px 22px;
+}
+
+.chat-thread-composer {
+  padding: 16px 22px 18px;
+  border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+}
+
 .card-grid {
   padding: 20px 22px;
 }
@@ -606,11 +636,17 @@ h3 {
   background: rgba(255, 255, 255, 0.035);
 }
 
-.message-card.user {
-  background: rgba(255, 150, 85, 0.09);
+.message-card {
+  width: min(78%, 720px);
 }
 
-.message-card.leader {
+.message-card.self {
+  justify-self: end;
+  background: rgba(255, 150, 85, 0.11);
+}
+
+.message-card.peer {
+  justify-self: start;
   background: rgba(88, 210, 255, 0.08);
 }
 
@@ -622,6 +658,14 @@ h3 {
 
 .agent-card-grid {
   flex-direction: column;
+}
+
+.agent-inline-actions {
+  margin-bottom: 10px;
+}
+
+.agent-chat-btn {
+  padding-inline: 12px;
 }
 
 .agent-thumb {
@@ -795,6 +839,11 @@ textarea:focus {
 .model-filter-copy strong {
   font-size: 14px;
   color: var(--text);
+}
+
+.default-tag {
+  margin-left: 8px;
+  vertical-align: middle;
 }
 
 .model-filter-copy span {

@@ -1,16 +1,27 @@
 const { providers, defaultRoutes } = require("./config");
-const { checkOllama, listModels: listOllamaModels, generate: generateWithOllama } = require("./ollama");
-const { isConfigured: isOpenAIConfigured, listModels: listOpenAIModels, generate: generateWithOpenAI } = require("./openai");
-const { isConfigured: isAnthropicConfigured, listModels: listAnthropicModels, generate: generateWithAnthropic } = require("./anthropic");
+const { checkOllama, listModels: listOllamaModels, generate: generateWithOllama, generateConversation: generateOllamaConversation } = require("./ollama");
+const {
+  isConfigured: isOpenAIConfigured,
+  listModels: listOpenAIModels,
+  generate: generateWithOpenAI,
+  generateConversation: generateOpenAIConversation,
+} = require("./openai");
+const {
+  isConfigured: isAnthropicConfigured,
+  listModels: listAnthropicModels,
+  generate: generateWithAnthropic,
+  generateConversation: generateAnthropicConversation,
+} = require("./anthropic");
 
 const roleIds = ["leader", "planner", "writer", "reviewer"];
+const DEFAULT_ROUTE_ID = "openai::gpt-5.4-2026-03-05";
 const currentRoutes = Object.fromEntries(
   roleIds.map((roleId) => {
     const route = defaultRoutes[roleId] || defaultRoutes.writer;
     return [roleId, buildRoute(route.provider, route.model)];
   })
 );
-const enabledRouteIds = new Set();
+const enabledRouteIds = new Set([DEFAULT_ROUTE_ID]);
 
 const providerOrder = ["openai", "anthropic", "ollama"];
 
@@ -205,6 +216,7 @@ async function getRuntimeCatalog() {
     providers: providerStates,
     models,
     allModels,
+    defaultRouteId: DEFAULT_ROUTE_ID,
     enabledRouteIds: getEnabledRouteIds(),
     routes: getConfiguredRoutes(),
   };
@@ -279,8 +291,36 @@ async function generate(role, prompt) {
   throw new Error(`Unsupported provider route: ${route.provider}`);
 }
 
+function buildConversationInstruction(role) {
+  return [
+    `You are the ${role} agent in AI Task Force.`,
+    "Reply as a helpful teammate in a direct chat thread.",
+    "Keep responses concise, practical, and grounded in the current conversation.",
+  ].join(" ");
+}
+
+async function generateConversation(role, messages) {
+  const route = resolveRoute(role);
+  const instruction = buildConversationInstruction(role);
+
+  if (route.provider === "ollama") {
+    return generateOllamaConversation(route.model, messages, instruction);
+  }
+
+  if (route.provider === "openai") {
+    return generateOpenAIConversation(route.model, messages, instruction);
+  }
+
+  if (route.provider === "anthropic") {
+    return generateAnthropicConversation(route.model, messages, instruction);
+  }
+
+  throw new Error(`Unsupported provider route: ${route.provider}`);
+}
+
 module.exports = {
   buildRouteId,
+  DEFAULT_ROUTE_ID,
   getProviderHealth,
   getRuntimeCatalog,
   getConfiguredRoutes,
@@ -289,4 +329,5 @@ module.exports = {
   setRouteEnabled,
   setRoleRoute,
   generate,
+  generateConversation,
 };

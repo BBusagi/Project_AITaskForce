@@ -65,9 +65,33 @@ async function generate(model, prompt) {
   };
 }
 
+function flattenMessages(messages) {
+  return messages
+    .map((message) => {
+      const role = message.role || "user";
+      const content = message.content || "";
+      return `${role.toUpperCase()}:\n${content}`;
+    })
+    .join("\n\n");
+}
+
+async function generateConversation(model, messages, instruction) {
+  const prompt = [
+    instruction,
+    "",
+    "Conversation history:",
+    flattenMessages(messages),
+    "",
+    "Respond with the next assistant message only.",
+  ].join("\n");
+
+  return generate(model, prompt);
+}
+
 module.exports = {
   checkOllama,
   listModels,
   generate,
+  generateConversation,
   resolveModel,
 };

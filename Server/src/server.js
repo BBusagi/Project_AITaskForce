@@ -11,7 +11,7 @@ const {
   buildAgentsView,
   buildSnapshot,
 } = require("./store");
-const { buildRouteId, getProviderHealth, getRuntimeCatalog, setRoleRoute, setRouteEnabled } = require("./model-gateway");
+const { buildRouteId, getProviderHealth, getRuntimeCatalog, setRoleRoute, setRouteEnabled, generateConversation } = require("./model-gateway");
 
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {
@@ -85,6 +85,7 @@ const server = http.createServer(async (req, res) => {
         routes: runtimeCatalog.routes,
         models: runtimeCatalog.models,
         allModels: runtimeCatalog.allModels,
+        defaultRouteId: runtimeCatalog.defaultRouteId,
         enabledRouteIds: runtimeCatalog.enabledRouteIds,
       });
       return;
@@ -101,6 +102,7 @@ const server = http.createServer(async (req, res) => {
           routes: runtimeCatalog.routes,
           models: runtimeCatalog.models,
           allModels: runtimeCatalog.allModels,
+          defaultRouteId: runtimeCatalog.defaultRouteId,
           enabledRouteIds: runtimeCatalog.enabledRouteIds,
         });
         return;
@@ -124,8 +126,33 @@ const server = http.createServer(async (req, res) => {
         routes: runtimeCatalog.routes,
         models: runtimeCatalog.models,
         allModels: runtimeCatalog.allModels,
+        defaultRouteId: runtimeCatalog.defaultRouteId,
         enabledRouteIds: runtimeCatalog.enabledRouteIds,
       });
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/chat") {
+      const body = await readJsonBody(req);
+      if (!body.role || !Array.isArray(body.messages) || body.messages.length === 0) {
+        sendJson(res, 400, { error: "role and messages are required" });
+        return;
+      }
+
+      const normalizedMessages = body.messages
+        .map((message) => ({
+          role: message.role === "assistant" ? "assistant" : "user",
+          content: typeof message.content === "string" ? message.content.trim() : "",
+        }))
+        .filter((message) => message.content);
+
+      if (normalizedMessages.length === 0) {
+        sendJson(res, 400, { error: "messages must contain text content" });
+        return;
+      }
+
+      const result = await generateConversation(body.role, normalizedMessages);
+      sendJson(res, 200, result);
       return;
     }
 

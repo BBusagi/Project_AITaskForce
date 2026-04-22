@@ -91,6 +91,7 @@ const dictionaries = {
       thread: "Leader Thread",
       checkins: "Check-ins",
       compose: "Compose",
+      directChats: "Direct Chats",
       overview: "Overview",
       stages: "Stage Flow",
       timeline: "Timeline",
@@ -188,6 +189,7 @@ const dictionaries = {
       apiModelsNote: "List every remote API model and choose which ones can be assigned to agents.",
       enabled: "Enabled",
       disabled: "Disabled",
+      default: "Default",
       connected: "Ollama Connected",
       disconnected: "Ollama Unavailable",
       noModels: "No models found",
@@ -230,6 +232,15 @@ const dictionaries = {
       loadDemo: "Load Demo Task",
       publishTask: "Publish Task",
       askStatus: "Ask Status",
+      openChat: "Open Chat",
+      sendMessage: "Send Message",
+    },
+    chatPanel: {
+      leaderIntro: "Leader conversation",
+      directIntro: "Direct conversation",
+      inputLabel: "Message",
+      inputPlaceholder: "Send a message to this workspace...",
+      noDirectChats: "No direct agent chats yet. Open one from the Team workspace.",
     },
     placeholder:
       "Example: Refactor the desktop shell into an outer icon rail, a collapsible resource sidebar, and a full workspace stage.",
@@ -375,6 +386,7 @@ const dictionaries = {
       thread: "Leader 会话",
       checkins: "进度检查",
       compose: "发布任务",
+      directChats: "直接会话",
       overview: "概览",
       stages: "阶段流转",
       timeline: "时间线",
@@ -504,6 +516,15 @@ const dictionaries = {
       loadDemo: "载入演示任务",
       publishTask: "发布任务",
       askStatus: "询问状态",
+      openChat: "打开会话",
+      sendMessage: "发送消息",
+    },
+    chatPanel: {
+      leaderIntro: "Leader 会话",
+      directIntro: "直接会话",
+      inputLabel: "消息内容",
+      inputPlaceholder: "向当前对象发送一条消息...",
+      noDirectChats: "还没有 agent 直接会话，请先从 Team 工作区创建。",
     },
     placeholder:
       "例如：把桌面端重构为外层 icon rail、可收起的资源中栏，以及完整右侧工作区。",
@@ -680,6 +701,7 @@ const state = {
       textKey: "demo.messageAck",
     },
   ],
+  chatConversations: [],
   timeline: [
     {
       type: "task_created",
@@ -704,6 +726,7 @@ const state = {
     providers: createDefaultProviders(),
     models: [],
     allModels: [],
+    defaultRouteId: "openai::gpt-5.4-2026-03-05",
     enabledRouteIds: [],
     configuredRoutes: createDefaultRoutes(),
   },
@@ -992,6 +1015,124 @@ function getProjectRecord(id) {
   return state.projects.records.find((record) => record.id === id);
 }
 
+function isAgentChatEntry(entryId) {
+  return typeof entryId === "string" && entryId.startsWith("chat-agent-");
+}
+
+function buildAgentChatId(agentId) {
+  return `chat-agent-${agentId}`;
+}
+
+function getConversationById(conversationId) {
+  return state.chatConversations.find((conversation) => conversation.id === conversationId) || null;
+}
+
+function getAgentConversation(agentId) {
+  return getConversationById(buildAgentChatId(agentId));
+}
+
+function buildAgentGreeting(agentId) {
+  return (
+    {
+    leader: "Open a direct thread with the Leader to discuss routing, synthesis, and final delivery.",
+    planner: "Open a direct thread with the Planner to discuss task structure, constraints, and sequencing.",
+    writer: "Open a direct thread with the Writer to request drafts, rewrites, and formatting changes.",
+    reviewer: "Open a direct thread with the Reviewer to inspect quality, issues, and approval logic.",
+    designer: "Designer is still a stub, but this thread can be used as the future entry point for visual direction.",
+    programmer: "Programmer is still a stub, but this thread can be used as the future entry point for implementation work.",
+    }[agentId] || "Direct agent thread created."
+  );
+}
+
+function createAgentConversation(agentId) {
+  const existingConversation = getAgentConversation(agentId);
+  if (existingConversation) return existingConversation;
+
+  const conversation = {
+    id: buildAgentChatId(agentId),
+    agentId,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    messages: [
+      {
+        id: `chat-${Date.now()}-${agentId}`,
+        sender: agentId,
+        time: formatTime(),
+        text: buildAgentGreeting(agentId),
+      },
+    ],
+  };
+
+  state.chatConversations.unshift(conversation);
+  return conversation;
+}
+
+function openAgentConversation(agentId) {
+  const conversation = createAgentConversation(agentId);
+  state.activeWorkspace = "chat";
+  state.activeEntry.chat = conversation.id;
+  state.sidebarCollapsed = false;
+  renderApp();
+}
+
+function appendConversationMessage(conversationId, sender, text) {
+  const conversation = getConversationById(conversationId);
+  if (!conversation) return;
+
+  conversation.messages.push({
+    id: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    sender,
+    time: formatTime(),
+    text,
+  });
+  conversation.updatedAt = Date.now();
+}
+
+function buildAgentReply(agentId, text) {
+  const status = formatStatus(getAgentById(agentId)?.status || "idle");
+  return `${roleLabel(agentId)} acknowledged: ${text}\n\nCurrent status: ${status}.\nCurrent task: ${getAgentTaskText(getAgentById(agentId))}.`;
+}
+
+async function requestAgentReply(conversation) {
+  const messages = conversation.messages.map((message) => ({
+    role: message.sender === "user" ? "user" : "assistant",
+    content: resolveMessageText(message),
+  }));
+
+  const result = await apiFetch("/chat", {
+    method: "POST",
+    body: JSON.stringify({
+      role: conversation.agentId,
+      messages,
+    }),
+  });
+
+  return result.text || "";
+}
+
+async function sendConversationMessage(conversationId, text) {
+  const conversation = getConversationById(conversationId);
+  if (!conversation) return;
+
+  appendConversationMessage(conversationId, "user", text);
+  renderApp();
+
+  try {
+    await refreshBackendAvailability();
+    if (state.connection.backendAvailable) {
+      const replyText = await requestAgentReply(conversation);
+      appendConversationMessage(conversationId, conversation.agentId, replyText || buildAgentReply(conversation.agentId, text));
+      renderApp();
+      return;
+    }
+  } catch {}
+
+  window.setTimeout(() => {
+    appendConversationMessage(conversationId, conversation.agentId, buildAgentReply(conversation.agentId, text));
+    renderApp();
+  }, 420);
+}
+
 function getProjectName(record) {
   return pickText(record?.name);
 }
@@ -1097,7 +1238,16 @@ function buildWorkspaceMeta() {
         },
         {
           label: t("groups.actions"),
-          items: [{ id: "compose", label: t("entries.compose"), meta: t("meta.plus") }],
+          items: [
+            { id: "compose", label: t("entries.compose"), meta: t("meta.plus") },
+            ...[...state.chatConversations]
+              .sort((left, right) => right.updatedAt - left.updatedAt)
+              .map((conversation) => ({
+                id: conversation.id,
+                label: roleLabel(conversation.agentId),
+                meta: metaFromStatus(getAgentById(conversation.agentId)?.status || "idle"),
+              })),
+          ],
         },
       ],
     },
@@ -1307,7 +1457,8 @@ function isLocalRoute(route) {
 }
 
 function getLLMFilterModels(kind) {
-  return state.connection.allModels.filter((model) => (kind === "local" ? isLocalRoute(model) : !isLocalRoute(model)));
+  const models = state.connection.allModels.filter((model) => (kind === "local" ? isLocalRoute(model) : !isLocalRoute(model)));
+  return kind === "api" ? [...models].reverse() : models;
 }
 
 function getProviderStatusMeta(agentId) {
@@ -1476,6 +1627,7 @@ async function refreshBackendAvailability() {
     state.connection.backendAvailable = false;
     state.connection.models = [];
     state.connection.allModels = [];
+    state.connection.defaultRouteId = "openai::gpt-5.4-2026-03-05";
     state.connection.enabledRouteIds = [];
     state.connection.providers = createDefaultProviders();
     state.connection.configuredRoutes = createDefaultRoutes();
@@ -1493,6 +1645,7 @@ async function refreshBackendModels() {
     };
     state.connection.models = runtime.models || [];
     state.connection.allModels = runtime.allModels || runtime.models || [];
+    state.connection.defaultRouteId = runtime.defaultRouteId || state.connection.defaultRouteId;
     state.connection.enabledRouteIds = runtime.enabledRouteIds || [];
     state.connection.configuredRoutes = {
       ...createDefaultRoutes(),
@@ -1501,6 +1654,7 @@ async function refreshBackendModels() {
   } catch {
     state.connection.models = [];
     state.connection.allModels = [];
+    state.connection.defaultRouteId = "openai::gpt-5.4-2026-03-05";
     state.connection.enabledRouteIds = [];
   }
 }
@@ -1520,6 +1674,7 @@ async function updateAgentRuntimeModel(agentId, routeId) {
   };
   state.connection.models = runtime.models || [];
   state.connection.allModels = runtime.allModels || runtime.models || [];
+  state.connection.defaultRouteId = runtime.defaultRouteId || state.connection.defaultRouteId;
   state.connection.enabledRouteIds = runtime.enabledRouteIds || [];
   state.connection.configuredRoutes = {
     ...createDefaultRoutes(),
@@ -1542,6 +1697,7 @@ async function updateRouteEnabled(routeId, enabled) {
   };
   state.connection.models = runtime.models || [];
   state.connection.allModels = runtime.allModels || runtime.models || [];
+  state.connection.defaultRouteId = runtime.defaultRouteId || state.connection.defaultRouteId;
   state.connection.enabledRouteIds = runtime.enabledRouteIds || [];
   state.connection.configuredRoutes = {
     ...createDefaultRoutes(),
@@ -1727,29 +1883,55 @@ function renderSidebar() {
   `;
 }
 
+function renderChatMessages(messages) {
+  return `
+    <div class="chat-thread-stream">
+      ${messages
+        .map((message) => {
+          const isSelf = message.sender === "user";
+          return `
+            <article class="message-card ${isSelf ? "self" : "peer"}">
+              <div class="message-head">
+                <span>${escapeHtml(roleLabel(message.sender))}</span>
+                <span>${escapeHtml(message.time)}</span>
+              </div>
+              <div class="message-body">${escapeHtml(resolveMessageText(message))}</div>
+            </article>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderChatComposer(formId, textareaId, placeholder, submitLabel, conversationId = "") {
+  return `
+    <div class="chat-thread-composer">
+      <form id="${escapeHtml(formId)}" class="chat-form" ${conversationId ? `data-chat-conversation-form="${escapeHtml(conversationId)}"` : ""}>
+        <label for="${escapeHtml(textareaId)}">${escapeHtml(t("chatPanel.inputLabel"))}</label>
+        <textarea
+          id="${escapeHtml(textareaId)}"
+          name="chat"
+          rows="4"
+          placeholder="${escapeHtml(placeholder)}"
+          required
+        ></textarea>
+        <div class="chat-actions">
+          <button type="submit" class="btn-primary">${escapeHtml(submitLabel)}</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
 function renderThreadContent() {
   return `
-    <div class="stage-layout">
-      <div class="dialog-card">
-        <div class="dialog-stream">
-          ${state.messages
-            .map(
-              (message) => `
-                <article class="message-card ${escapeHtml(message.sender)}">
-                  <div class="message-head">
-                    <span>${escapeHtml(roleLabel(message.sender))}</span>
-                    <span>${escapeHtml(message.time)}</span>
-                  </div>
-                  <div class="message-body">${escapeHtml(resolveMessageText(message))}</div>
-                </article>
-              `
-            )
-            .join("")}
+    <div class="chat-thread-layout">
+      <div class="chat-thread-header">
+        <div>
+          <p class="eyebrow">${escapeHtml(t("chatPanel.leaderIntro"))}</p>
+          <h3>${escapeHtml(t("entries.thread"))}</h3>
         </div>
-      </div>
-
-      <div class="info-block">
-        <p class="eyebrow">${escapeHtml(t("stage.stageSummary"))}</p>
         <div class="phase-strip">
           ${phases
             .map((phase) => {
@@ -1765,8 +1947,46 @@ function renderThreadContent() {
             })
             .join("")}
         </div>
-        <p class="leader-note">${escapeHtml(buildLeaderNote())}</p>
       </div>
+
+      ${renderChatMessages(state.messages)}
+      ${renderChatComposer("leader-thread-form", "leader-thread-input", t("chatPanel.inputPlaceholder"), t("buttons.sendMessage"))}
+    </div>
+  `;
+}
+
+function renderDirectChatContent(conversationId) {
+  const conversation = getConversationById(conversationId);
+  if (!conversation) {
+    return `
+      <div class="stage-layout">
+        <div class="info-block">
+          <p>${escapeHtml(t("chatPanel.noDirectChats"))}</p>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="chat-thread-layout">
+      <div class="chat-thread-header">
+        <div>
+          <p class="eyebrow">${escapeHtml(t("chatPanel.directIntro"))}</p>
+          <h3>${escapeHtml(roleLabel(conversation.agentId))}</h3>
+        </div>
+        <span class="${badgeClass(getAgentById(conversation.agentId)?.status || "idle")}">
+          ${escapeHtml(formatStatus(getAgentById(conversation.agentId)?.status || "idle"))}
+        </span>
+      </div>
+
+      ${renderChatMessages(conversation.messages)}
+      ${renderChatComposer(
+        `agent-chat-form-${escapeHtml(conversation.agentId)}`,
+        `agent-chat-input-${escapeHtml(conversation.agentId)}`,
+        t("chatPanel.inputPlaceholder"),
+        t("buttons.sendMessage"),
+        conversation.id
+      )}
     </div>
   `;
 }
@@ -1855,6 +2075,11 @@ function renderTeamOverviewContent() {
                   <strong>${escapeHtml(roleLabel(agent.id))}</strong>
                   <span class="${badgeClass(agent.status)}">${escapeHtml(formatStatus(agent.status))}</span>
                 </div>
+                <div class="agent-inline-actions">
+                  <button class="btn-secondary agent-chat-btn" type="button" data-open-agent-chat="${escapeHtml(agent.id)}">
+                    ${escapeHtml(t("buttons.openChat"))}
+                  </button>
+                </div>
                 <p>${escapeHtml(roleDuty(agent.id))}</p>
                 <p>${escapeHtml(getAgentTaskText(agent))}</p>
                 <div class="skill-list">
@@ -1880,6 +2105,11 @@ function renderAgentDetailContent(agentId) {
         <div class="agent-head">
           <h3>${escapeHtml(roleLabel(agent.id))}</h3>
           <span class="${badgeClass(agent.status)}">${escapeHtml(formatStatus(agent.status))}</span>
+        </div>
+        <div class="agent-inline-actions">
+          <button class="btn-secondary agent-chat-btn" type="button" data-open-agent-chat="${escapeHtml(agent.id)}">
+            ${escapeHtml(t("buttons.openChat"))}
+          </button>
         </div>
         <p>${escapeHtml(roleDuty(agent.id))}</p>
       </div>
@@ -2349,11 +2579,15 @@ function renderLLMFilterRows(kind) {
             : providerReady
               ? t("stage.enabled")
               : t("stage.disabled");
+          const isDefaultModel = model.id === state.connection.defaultRouteId;
 
           return `
             <label class="model-filter-row">
               <div class="model-filter-copy">
-                <strong>${escapeHtml(model.label || model.name)}</strong>
+                <strong>
+                  ${escapeHtml(model.label || model.name)}
+                  ${isDefaultModel ? `<span class="tag accent default-tag">${escapeHtml(t("stage.default"))}</span>` : ""}
+                </strong>
                 <span>${escapeHtml(providerStatus)}</span>
               </div>
               <input
@@ -2439,6 +2673,7 @@ function renderStageContentBody() {
   const entry = getActiveEntryId();
 
   if (workspace === "chat" && entry === "thread") return renderThreadContent();
+  if (workspace === "chat" && isAgentChatEntry(entry)) return renderDirectChatContent(entry);
   if (workspace === "chat" && entry === "compose") return renderComposeContent();
   if (workspace === "chat" && entry === "checkins") return renderCheckinsContent();
   if (workspace === "team" && entry === "overview") return renderTeamOverviewContent();
@@ -2664,6 +2899,10 @@ function bindStageActions() {
   const teamLayoutButtons = [...document.querySelectorAll("[data-team-layout]")];
   const modelSelects = [...document.querySelectorAll("[data-model-role]")];
   const routeToggles = [...document.querySelectorAll("[data-route-toggle]")];
+  const agentChatButtons = [...document.querySelectorAll("[data-open-agent-chat]")];
+  const directChatForms = [...document.querySelectorAll("[data-chat-conversation-form]")];
+  const leaderThreadForm = document.getElementById("leader-thread-form");
+  const leaderThreadInput = document.getElementById("leader-thread-input");
 
   treeItems.forEach((button) => {
     button.addEventListener("click", () => {
@@ -2683,9 +2922,43 @@ function bindStageActions() {
     });
   }
 
+  if (leaderThreadForm && leaderThreadInput) {
+    leaderThreadForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const value = leaderThreadInput.value.trim();
+      if (!value) return;
+
+      pushMessage("user", value);
+      void runTaskLifecycle(value);
+      leaderThreadInput.value = "";
+    });
+  }
+
   if (askStatusBtn) {
     askStatusBtn.addEventListener("click", handleStatusQuestion);
   }
+
+  agentChatButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const agentId = button.dataset.openAgentChat;
+      if (!agentId) return;
+      openAgentConversation(agentId);
+    });
+  });
+
+  directChatForms.forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const conversationId = form.dataset.chatConversationForm;
+      const textarea = form.querySelector("textarea");
+      const value = textarea?.value.trim();
+
+      if (!conversationId || !value) return;
+
+      sendConversationMessage(conversationId, value);
+      textarea.value = "";
+    });
+  });
 
   quickButtons.forEach((button) => {
     button.addEventListener("click", () => {

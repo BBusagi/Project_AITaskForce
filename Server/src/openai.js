@@ -64,6 +64,19 @@ function readOutputText(result) {
   return chunks.join("\n").trim();
 }
 
+function toInputMessage(message) {
+  return {
+    type: "message",
+    role: message.role,
+    content: [
+      {
+        type: "input_text",
+        text: message.content,
+      },
+    ],
+  };
+}
+
 async function generate(model, prompt) {
   const result = await openaiRequest("/responses", {
     method: "POST",
@@ -90,8 +103,31 @@ async function generate(model, prompt) {
   };
 }
 
+async function generateConversation(model, messages, instruction) {
+  const result = await openaiRequest("/responses", {
+    method: "POST",
+    body: JSON.stringify({
+      model,
+      input: [
+        toInputMessage({
+          role: "developer",
+          content: instruction,
+        }),
+        ...messages.map(toInputMessage),
+      ],
+    }),
+  });
+
+  return {
+    provider: "openai",
+    model,
+    text: readOutputText(result),
+  };
+}
+
 module.exports = {
   isConfigured,
   listModels,
   generate,
+  generateConversation,
 };

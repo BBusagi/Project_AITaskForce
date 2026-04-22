@@ -13,7 +13,7 @@ module.exports = {
       label: "GPT API",
       baseUrl: "https://api.openai.com/v1",
       apiKey: "",
-      models: ["gpt-4.1", "gpt-4.1-mini"],
+      models: ["gpt-5.4-2026-03-05", "gpt-4.1", "gpt-4.1-mini"],
     },
     anthropic: {
       label: "Claude API",
@@ -26,20 +26,20 @@ module.exports = {
   routing: {
     routes: {
       leader: {
-        provider: "ollama",
-        model: "qwen3:8b",
+        provider: "openai",
+        model: "gpt-5.4-2026-03-05",
       },
       planner: {
-        provider: "ollama",
-        model: "qwen3:8b",
+        provider: "openai",
+        model: "gpt-5.4-2026-03-05",
       },
       writer: {
-        provider: "ollama",
-        model: "qwen3:8b",
+        provider: "openai",
+        model: "gpt-5.4-2026-03-05",
       },
       reviewer: {
-        provider: "ollama",
-        model: "qwen3:8b",
+        provider: "openai",
+        model: "gpt-5.4-2026-03-05",
       },
     },
   },
