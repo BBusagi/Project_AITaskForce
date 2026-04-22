@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Task Force Web MVP</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="web-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">ATF</div>
+          <div>
+            <p class="eyebrow">Web MVP</p>
+            <h1>AI Task Force Workspace</h1>
+          </div>
+        </div>
+        <div class="topbar-meta">
+          <div class="meta-card">
+            <span>Workflow</span>
+            <strong>Leader → Planner → Writer → Reviewer</strong>
+          </div>
+          <div class="meta-card">
+            <span>Status</span>
+            <strong>Mock API Ready</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="panel team-rail">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Team</p>
+              <h2>Agent Organization</h2>
+            </div>
+          </div>
+          <div id="web-team-list" class="team-list"></div>
+        </aside>
+
+        <section class="center-stage">
+          <section class="hero panel">
+            <div>
+              <p class="eyebrow">Workspace</p>
+              <h2>把任务交给一支 AI 团队，而不是聊天框。</h2>
+              <p>
+                当前 Web MVP 聚焦任务输入、协作阶段可视化、子任务拆解、事件时间线和历史任务入口。
+              </p>
+            </div>
+            <div id="web-metrics" class="metrics"></div>
+          </section>
+
+          <section class="panel composer-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Task Input</p>
+                <h2>提交新任务</h2>
+              </div>
+            </div>
+
+            <form id="web-task-form" class="task-form">
+              <input id="web-task-title" name="title" type="text" placeholder="任务标题" required />
+              <select id="web-task-priority" name="priority">
+                <option value="high">高优先级</option>
+                <option value="medium" selected>中优先级</option>
+                <option value="low">低优先级</option>
+              </select>
+              <textarea
+                id="web-task-input"
+                name="input"
+                rows="4"
+                placeholder="描述任务目标、约束和期望输出。"
+                required
+              ></textarea>
+              <div class="form-actions">
+                <button type="submit" class="btn-primary">创建任务</button>
+                <button type="button" id="web-load-demo" class="btn-secondary">载入示例</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="content-grid">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Conversation</p>
+                  <h2>Leader Thread</h2>
+                </div>
+              </div>
+              <div id="web-thread" class="thread-list"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Subtasks</p>
+                  <h2>Execution Board</h2>
+                </div>
+              </div>
+              <div id="web-subtasks" class="subtask-list"></div>
+            </article>
+          </section>
+        </section>
+
+        <aside class="panel right-rail">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Task Detail</p>
+              <h2 id="web-task-name">当前任务</h2>
+            </div>
+            <span id="web-task-phase" class="tag">Pending</span>
+          </div>
+
+          <section class="side-block">
+            <h3>Current Stage</h3>
+            <div id="web-stages" class="stage-list"></div>
+          </section>
+
+          <section class="side-block">
+            <h3>Timeline</h3>
+            <div id="web-timeline" class="timeline-list"></div>
+          </section>
+
+          <section class="side-block">
+            <h3>Task History</h3>
+            <div id="web-history" class="history-list"></div>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

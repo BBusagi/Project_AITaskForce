@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Task Force Desktop</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="window-bar">
+        <div class="brand-block">
+          <div class="brand-mark">ATF</div>
+          <div>
+            <p class="eyebrow">Electron Workspace</p>
+            <h1>AI Task Force</h1>
+          </div>
+        </div>
+        <div class="window-meta">
+          <div class="meta-pill">
+            <span>Leader Channel</span>
+            <strong>Online</strong>
+          </div>
+          <div class="meta-pill">
+            <span>Runtime</span>
+            <strong id="runtime-badge">Browser Preview</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="desktop-layout">
+        <aside class="sidebar-shell">
+          <div class="sidebar-card">
+            <div class="sidebar-head">
+              <p class="eyebrow">Navigation</p>
+              <h2>Workspace</h2>
+            </div>
+
+            <nav class="nav-list" aria-label="Desktop navigation">
+              <button class="nav-item is-active" data-view="chat">
+                <span class="nav-kicker">01</span>
+                <span class="nav-copy">
+                  <strong>Chat</strong>
+                  <small>发布任务 / 询问现状</small>
+                </span>
+              </button>
+              <button class="nav-item" data-view="team">
+                <span class="nav-kicker">02</span>
+                <span class="nav-copy">
+                  <strong>Team</strong>
+                  <small>查看 agent 职责、状态和 skills</small>
+                </span>
+              </button>
+              <button class="nav-item" data-view="task">
+                <span class="nav-kicker">03</span>
+                <span class="nav-copy">
+                  <strong>Task</strong>
+                  <small>查看当前任务和执行阶段</small>
+                </span>
+              </button>
+            </nav>
+
+            <section class="sidebar-summary">
+              <p class="eyebrow">Current Task</p>
+              <h3 id="sidebar-task-title">--</h3>
+              <div class="summary-meta">
+                <span id="sidebar-task-phase" class="tag accent">Pending</span>
+                <span id="sidebar-task-owner" class="tag">Leader</span>
+              </div>
+              <p id="sidebar-task-note" class="summary-note"></p>
+            </section>
+          </div>
+        </aside>
+
+        <section class="stage-shell">
+          <section class="view-panel is-visible" data-view-panel="chat">
+            <div class="panel-frame">
+              <div class="panel-head panel-head-spaced">
+                <div>
+                  <p class="eyebrow">Chat</p>
+                  <h2>Leader Dialogue</h2>
+                </div>
+                <div class="task-banner" id="task-banner"></div>
+              </div>
+
+              <div class="dialog-card">
+                <div class="dialog-stream" id="dialog-stream"></div>
+              </div>
+
+              <div class="stage-footer">
+                <div class="phase-strip" id="phase-strip"></div>
+                <div class="leader-note" id="leader-note"></div>
+              </div>
+
+              <section class="panel-frame section-tight">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Quick Chat</p>
+                    <h3>发任务 / 问现状</h3>
+                  </div>
+                </div>
+
+                <div class="quick-actions">
+                  <button class="quick-btn" data-prompt="status">询问当前进度</button>
+                  <button class="quick-btn" data-prompt="handoff">询问当前由谁负责</button>
+                  <button class="quick-btn" data-prompt="demo">载入演示任务</button>
+                </div>
+
+                <form id="chat-form" class="chat-form">
+                  <label for="chat-input">发送给 Leader</label>
+                  <textarea
+                    id="chat-input"
+                    name="chat"
+                    rows="4"
+                    placeholder="例如：请把这份需求文档整理成面向投资人的一页式摘要。"
+                    required
+                  ></textarea>
+                  <div class="chat-actions">
+                    <button type="submit" class="btn-primary">发布任务</button>
+                    <button type="button" id="ask-status" class="btn-secondary">询问现状</button>
+                  </div>
+                </form>
+              </section>
+            </div>
+          </section>
+
+          <section class="view-panel" data-view-panel="team">
+            <div class="panel-frame">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Team</p>
+                  <h2>Agents 现状</h2>
+                </div>
+                <span class="tag accent">Live</span>
+              </div>
+              <div id="team-panel" class="team-panel"></div>
+            </div>
+          </section>
+
+          <section class="view-panel" data-view-panel="task">
+            <div class="panel-frame">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Task</p>
+                  <h2>当前任务</h2>
+                </div>
+                <span id="task-status-badge" class="tag">Pending</span>
+              </div>
+              <div id="task-panel" class="task-panel"></div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
