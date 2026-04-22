@@ -344,7 +344,7 @@ function renderThreadContent() {
         </div>
       </div>
 
-      <div class="surface-card">
+      <div class="info-block">
         <p class="eyebrow">Stage Summary</p>
         <div class="phase-strip">
           ${phases
@@ -370,7 +370,7 @@ function renderThreadContent() {
 function renderComposeContent() {
   return `
     <div class="stage-layout">
-      <div class="surface-card">
+      <div class="info-block">
         <p class="eyebrow">Quick Actions</p>
         <div class="quick-actions">
           <button class="quick-btn" type="button" data-prompt="status">询问当前进度</button>
@@ -379,7 +379,7 @@ function renderComposeContent() {
         </div>
       </div>
 
-      <div class="surface-card">
+      <div class="info-block">
         <p class="eyebrow">Compose</p>
         <h3>发送给 Leader</h3>
         <p class="stage-caption">这里是完整输入区。左侧 icon 只决定打开哪个 workspace，中栏决定看哪个条目，真正的内容在这里编辑。</p>
@@ -405,7 +405,7 @@ function renderComposeContent() {
 function renderCheckinsContent() {
   return `
     <div class="stage-layout">
-      <div class="surface-card">
+      <div class="info-block">
         <p class="eyebrow">Current Status</p>
         <h3>${escapeHtml(formatPhase(state.currentTask.phase))}</h3>
         <div class="stage-meta">
@@ -417,12 +417,12 @@ function renderCheckinsContent() {
       </div>
 
       <div class="card-grid">
-        <div class="mini-card">
+        <div class="info-block">
           <p class="eyebrow">Ask</p>
           <h4>当前由谁负责</h4>
           <p>${escapeHtml(`当前负责人是 ${state.currentTask.owner}。`)}</p>
         </div>
-        <div class="mini-card">
+        <div class="info-block">
           <p class="eyebrow">Ask</p>
           <h4>团队在做什么</h4>
           <p>${escapeHtml(state.agents.map((agent) => `${agent.name}：${agent.currentTask}`).join("；"))}</p>
@@ -462,7 +462,7 @@ function renderAgentDetailContent(agentId) {
 
   return `
     <div class="stage-layout">
-      <div class="surface-card">
+      <div class="info-block">
         <p class="eyebrow">Agent</p>
         <div class="agent-head">
           <h3>${escapeHtml(agent.name)}</h3>
@@ -474,14 +474,14 @@ function renderAgentDetailContent(agentId) {
         </div>
       </div>
 
-      <div class="surface-card">
+      <div class="info-block">
         <p class="eyebrow">Skills</p>
         <div class="skill-list">
           ${agent.skills.map((skill) => `<span class="skill">${escapeHtml(skill)}</span>`).join("")}
         </div>
       </div>
 
-      <div class="mini-card">
+      <div class="info-block">
         <p class="eyebrow">Context</p>
         <p>${escapeHtml(`当前 ${agent.name} 正在参与 "${state.currentTask.title}"。`)}</p>
       </div>
@@ -492,7 +492,7 @@ function renderAgentDetailContent(agentId) {
 function renderTaskOverviewContent() {
   return `
     <div class="stage-layout">
-      <div class="surface-card">
+      <div class="info-block">
         <p class="eyebrow">Current Task</p>
         <h3>${escapeHtml(state.currentTask.title)}</h3>
         <p>${escapeHtml(state.currentTask.description)}</p>
@@ -503,7 +503,7 @@ function renderTaskOverviewContent() {
         </div>
       </div>
 
-      <div class="mini-card">
+      <div class="info-block">
         <p class="eyebrow">Summary</p>
         <p>${escapeHtml(buildTaskSummary())}</p>
       </div>
@@ -514,7 +514,7 @@ function renderTaskOverviewContent() {
 function renderStageFlowContent() {
   return `
     <div class="stage-layout">
-      <div class="surface-card">
+      <div class="info-block">
         <p class="eyebrow">Stage Flow</p>
         <div class="phase-strip">
           ${phases
