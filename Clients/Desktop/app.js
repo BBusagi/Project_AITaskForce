@@ -16,6 +16,8 @@ const dictionaries = {
       chat: "Chat",
       team: "Team",
       task: "Task",
+      projects: "Projects",
+      usage: "Usage",
       settings: "Settings",
       runtime: "Runtime",
       browserPreview: "Browser Preview",
@@ -26,6 +28,8 @@ const dictionaries = {
         chat: "Chat workspace",
         team: "Team workspace",
         task: "Task workspace",
+        projects: "Projects workspace",
+        usage: "Usage workspace",
         settings: "Settings workspace",
       },
     },
@@ -35,6 +39,9 @@ const dictionaries = {
       views: "Views",
       agents: "Agents",
       current: "Current",
+      portfolio: "Portfolio",
+      modules: "Modules",
+      breakdown: "Breakdown",
       appearance: "Appearance",
       localization: "Localization",
     },
@@ -45,6 +52,10 @@ const dictionaries = {
       overview: "Overview",
       stages: "Stage Flow",
       timeline: "Timeline",
+      portfolio: "Portfolio Overview",
+      teamUsage: "By Team",
+      projectUsage: "By Project",
+      budget: "Budget",
       theme: "Theme",
       language: "Language",
       leader: "Leader",
@@ -116,11 +127,44 @@ const dictionaries = {
       appearance: "Appearance",
       language: "Language",
       teamOverview: "Team Overview",
+      moduleBreakdown: "Module Breakdown",
+      workspaceSurface: "Workspace Surfaces",
       chooseTheme: "Choose how the desktop shell should look.",
       chooseLanguage: "Choose the interface language for the desktop shell.",
       list: "List",
       grid: "Grid",
       progress: "Progress",
+    },
+    projectsPanel: {
+      portfolioIntro: "Track the main project and each delivery module from one desktop shell.",
+      totalSurfaces: "Project Surfaces",
+      moduleCount: "Module Workspaces",
+      openBugs: "Open Bugs",
+      avgProgress: "Average Progress",
+      bugs: "Bugs",
+      owner: "Owner",
+      workspaces: "Workspaces",
+      highlights: "Highlights",
+      status: "Stage",
+      progress: "Progress",
+    },
+    usagePanel: {
+      teamIntro: "Visualize token burn by individual team roles.",
+      projectIntro: "Compare token consumption across projects and modules.",
+      budgetIntro: "Track current monthly usage, projected burn, and routing mix.",
+      totalTokens: "Total Tokens",
+      estimatedCost: "Estimated Cost",
+      topConsumer: "Top Consumer",
+      remoteShare: "Remote Share",
+      localShare: "Local Share",
+      monthlyBudget: "Monthly Budget",
+      projectedUsage: "Projected Usage",
+      routingMix: "Routing Mix",
+      requests: "Requests",
+      tokens: "Tokens",
+      cost: "Cost",
+      byRole: "By Role",
+      byProject: "By Project",
     },
     buttons: {
       askProgress: "Ask Current Progress",
@@ -240,6 +284,8 @@ const dictionaries = {
       chat: "聊天",
       team: "团队",
       task: "任务",
+      projects: "项目",
+      usage: "用量",
       settings: "设置",
       runtime: "运行环境",
       browserPreview: "浏览器预览",
@@ -250,6 +296,8 @@ const dictionaries = {
         chat: "聊天工作区",
         team: "团队工作区",
         task: "任务工作区",
+        projects: "项目工作区",
+        usage: "用量工作区",
         settings: "设置工作区",
       },
     },
@@ -259,6 +307,9 @@ const dictionaries = {
       views: "视图",
       agents: "成员",
       current: "当前",
+      portfolio: "项目总览",
+      modules: "模块",
+      breakdown: "拆分",
       appearance: "外观",
       localization: "语言",
     },
@@ -269,6 +320,10 @@ const dictionaries = {
       overview: "概览",
       stages: "阶段流转",
       timeline: "时间线",
+      portfolio: "项目总览",
+      teamUsage: "按团队",
+      projectUsage: "按项目",
+      budget: "预算",
       theme: "主题",
       language: "语言",
       leader: "Leader",
@@ -340,11 +395,44 @@ const dictionaries = {
       appearance: "外观",
       language: "语言",
       teamOverview: "团队概览",
+      moduleBreakdown: "模块拆分",
+      workspaceSurface: "工作区表面",
       chooseTheme: "选择桌面壳层的显示主题。",
       chooseLanguage: "选择桌面壳层的界面语言。",
       list: "列表",
       grid: "网格",
       progress: "进度",
+    },
+    projectsPanel: {
+      portfolioIntro: "在同一个桌面壳层里追踪主项目和各个交付模块。",
+      totalSurfaces: "项目面板数",
+      moduleCount: "模块工作区",
+      openBugs: "未关闭 Bug",
+      avgProgress: "平均进度",
+      bugs: "Bug 数",
+      owner: "负责人",
+      workspaces: "工作区",
+      highlights: "关键点",
+      status: "开发阶段",
+      progress: "进度",
+    },
+    usagePanel: {
+      teamIntro: "按团队成员角色可视化 token 消耗。",
+      projectIntro: "对比不同项目和模块的 token 消耗。",
+      budgetIntro: "跟踪当前月度消耗、预测用量和模型路由占比。",
+      totalTokens: "总 Tokens",
+      estimatedCost: "预估成本",
+      topConsumer: "最高消耗者",
+      remoteShare: "远程模型占比",
+      localShare: "本地模型占比",
+      monthlyBudget: "月度预算",
+      projectedUsage: "预测用量",
+      routingMix: "路由占比",
+      requests: "请求数",
+      tokens: "Tokens",
+      cost: "成本",
+      byRole: "按角色",
+      byProject: "按项目",
     },
     buttons: {
       askProgress: "询问当前进度",
@@ -453,6 +541,8 @@ const state = {
     chat: "thread",
     team: "overview",
     task: "overview",
+    projects: "portfolio",
+    usage: "teamUsage",
     settings: "theme",
   },
   teamOverviewLayout: "list",
@@ -543,6 +633,157 @@ const state = {
       textKey: "demo.timelineWriting",
     },
   ],
+  projects: {
+    records: [
+      {
+        id: "project-atf",
+        kind: "project",
+        name: {
+          en: "AI Task Force",
+          "zh-CN": "AI Task Force",
+        },
+        summary: {
+          en: "Shared product model across Web and Desktop clients with a dialogue-first workspace shell.",
+          "zh-CN": "Web 与 Desktop 共用产品模型，并统一为对话优先的工作区壳层。",
+        },
+        stage: {
+          en: "Integration",
+          "zh-CN": "集成中",
+        },
+        owner: "leader",
+        bugs: 14,
+        progress: 72,
+        workspaces: ["Desktop", "Web", "Gateway", "Models"],
+        highlights: [
+          {
+            en: "Desktop shell now uses an outer rail with a collapsible middle sidebar.",
+            "zh-CN": "Desktop 壳层已经改为最外层 rail 加可收起中栏。",
+          },
+          {
+            en: "Shared task semantics remain aligned across both clients.",
+            "zh-CN": "两个客户端仍共享同一套任务语义和状态模型。",
+          },
+        ],
+        childIds: ["desktop-client", "web-client", "model-gateway"],
+      },
+      {
+        id: "desktop-client",
+        kind: "module",
+        parentId: "project-atf",
+        name: {
+          en: "Desktop Client",
+          "zh-CN": "Desktop 客户端",
+        },
+        summary: {
+          en: "Electron dialogue-first shell with Team, Projects, Usage, Task, and Settings workspaces.",
+          "zh-CN": "Electron 对话优先壳层，包含 Team、Projects、Usage、Task 和 Settings 工作区。",
+        },
+        stage: {
+          en: "Polish",
+          "zh-CN": "打磨中",
+        },
+        owner: "programmer",
+        bugs: 3,
+        progress: 82,
+        workspaces: ["Shell", "Team", "Projects", "Usage"],
+        highlights: [
+          {
+            en: "Language settings now switch between English and Simplified Chinese.",
+            "zh-CN": "语言设置已经支持英文和简体中文切换。",
+          },
+          {
+            en: "Middle sidebar behavior mirrors Slack / VS Code style collapsing.",
+            "zh-CN": "中栏交互已经接近 Slack / VS Code 的收起逻辑。",
+          },
+        ],
+      },
+      {
+        id: "web-client",
+        kind: "module",
+        parentId: "project-atf",
+        name: {
+          en: "Web Client",
+          "zh-CN": "Web 客户端",
+        },
+        summary: {
+          en: "Browser workspace MVP focused on the shared task model and timeline rendering.",
+          "zh-CN": "浏览器端 MVP，重点在共享任务模型和时间线展示。",
+        },
+        stage: {
+          en: "Iteration",
+          "zh-CN": "迭代中",
+        },
+        owner: "writer",
+        bugs: 5,
+        progress: 64,
+        workspaces: ["Workspace", "Agents", "Timeline"],
+        highlights: [
+          {
+            en: "Needs tighter project-level navigation to match the Desktop shell.",
+            "zh-CN": "还需要补齐更强的项目级导航，和 Desktop 壳层保持一致。",
+          },
+          {
+            en: "Timeline and task detail views are already aligned with the shared data model.",
+            "zh-CN": "时间线和任务详情视图已经对齐共享数据模型。",
+          },
+        ],
+      },
+      {
+        id: "model-gateway",
+        kind: "module",
+        parentId: "project-atf",
+        name: {
+          en: "Model Gateway",
+          "zh-CN": "模型网关",
+        },
+        summary: {
+          en: "Routing layer for GPT and local Ollama workloads, with review-focused remote usage.",
+          "zh-CN": "为 GPT 和本地 Ollama 提供统一路由，审核与最终输出偏向远程模型。",
+        },
+        stage: {
+          en: "Validation",
+          "zh-CN": "验证中",
+        },
+        owner: "reviewer",
+        bugs: 2,
+        progress: 58,
+        workspaces: ["Planner", "Writer", "Reviewer"],
+        highlights: [
+          {
+            en: "Remote and local routing split is stable but still needs cost controls.",
+            "zh-CN": "远程和本地模型的路由策略已经稳定，但还需要成本控制。",
+          },
+          {
+            en: "Usage reporting is now exposed in the new Usage workspace.",
+            "zh-CN": "新的 Usage 工作区已经开始暴露消耗统计信息。",
+          },
+        ],
+      },
+    ],
+  },
+  usage: {
+    team: [
+      { id: "leader", tokens: 124000, cost: 4.86, requests: 96, share: 29 },
+      { id: "planner", tokens: 98000, cost: 3.94, requests: 72, share: 23 },
+      { id: "writer", tokens: 76000, cost: 1.12, requests: 148, share: 18 },
+      { id: "reviewer", tokens: 82000, cost: 3.28, requests: 64, share: 19 },
+      { id: "designer", tokens: 24000, cost: 0.42, requests: 18, share: 6 },
+      { id: "programmer", tokens: 18000, cost: 0.31, requests: 14, share: 5 },
+    ],
+    projects: [
+      { id: "project-atf", tokens: 176000, cost: 6.48, requests: 132, share: 41 },
+      { id: "desktop-client", tokens: 112000, cost: 3.84, requests: 104, share: 26 },
+      { id: "web-client", tokens: 86000, cost: 1.74, requests: 92, share: 20 },
+      { id: "model-gateway", tokens: 54000, cost: 1.87, requests: 84, share: 13 },
+    ],
+    budget: {
+      cap: 480000,
+      used: 428000,
+      projected: 452000,
+      remoteShare: 67,
+      localShare: 33,
+    },
+  },
 };
 
 let simulationTimer = null;
@@ -612,6 +853,31 @@ function roleDuty(roleId) {
   return t(`duties.${roleId}`);
 }
 
+function pickText(value) {
+  if (typeof value === "string") return value;
+  if (!value) return "";
+  return value[state.language] || value.en || Object.values(value)[0] || "";
+}
+
+function formatCompactNumber(value) {
+  return new Intl.NumberFormat(getLocale(), {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatPercent(value) {
+  return `${value}%`;
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat(getLocale(), {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 function getCurrentTaskTitle() {
   return state.currentTask.titleKey ? t(state.currentTask.titleKey) : state.currentTask.title;
 }
@@ -622,6 +888,22 @@ function getCurrentTaskDescription() {
 
 function getAgentById(id) {
   return state.agents.find((agent) => agent.id === id);
+}
+
+function getProjectRecord(id) {
+  return state.projects.records.find((record) => record.id === id);
+}
+
+function getProjectName(record) {
+  return pickText(record?.name);
+}
+
+function getProjectSummary(record) {
+  return pickText(record?.summary);
+}
+
+function getProjectStage(record) {
+  return pickText(record?.stage);
 }
 
 function getAgentTaskText(agent) {
@@ -747,6 +1029,36 @@ function buildWorkspaceMeta() {
             { id: "overview", label: t("entries.overview"), meta: t("meta.now") },
             { id: "stages", label: t("entries.stages"), meta: t("meta.count5") },
             { id: "timeline", label: t("entries.timeline"), meta: t("meta.log") },
+          ],
+        },
+      ],
+    },
+    projects: {
+      title: t("rail.projects"),
+      groups: [
+        {
+          label: t("groups.portfolio"),
+          items: [{ id: "portfolio", label: t("entries.portfolio"), meta: formatCompactNumber(state.projects.records.length) }],
+        },
+        {
+          label: t("groups.modules"),
+          items: state.projects.records.map((record) => ({
+            id: record.id,
+            label: getProjectName(record),
+            meta: formatPercent(record.progress),
+          })),
+        },
+      ],
+    },
+    usage: {
+      title: t("rail.usage"),
+      groups: [
+        {
+          label: t("groups.breakdown"),
+          items: [
+            { id: "teamUsage", label: t("entries.teamUsage"), meta: formatCompactNumber(state.usage.team.length) },
+            { id: "projectUsage", label: t("entries.projectUsage"), meta: formatCompactNumber(state.usage.projects.length) },
+            { id: "budget", label: t("entries.budget"), meta: formatPercent(Math.round((state.usage.budget.used / state.usage.budget.cap) * 100)) },
           ],
         },
       ],
@@ -1250,6 +1562,345 @@ function renderTimelineContent() {
   `;
 }
 
+function renderStatsGrid(items) {
+  return `
+    <div class="card-grid stats-grid">
+      ${items
+        .map(
+          (item) => `
+            <article class="stat-card">
+              <span class="eyebrow">${escapeHtml(item.label)}</span>
+              <strong class="stat-value">${escapeHtml(item.value)}</strong>
+              <p>${escapeHtml(item.note)}</p>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderProjectCard(record) {
+  return `
+    <article class="project-card">
+      <div class="project-card-head">
+        <div>
+          <h3>${escapeHtml(getProjectName(record))}</h3>
+          <p>${escapeHtml(getProjectSummary(record))}</p>
+        </div>
+        <span class="tag accent">${escapeHtml(getProjectStage(record))}</span>
+      </div>
+
+      <div class="project-card-meta">
+        <span class="tag">${escapeHtml(t("projectsPanel.owner"))}: ${escapeHtml(roleLabel(record.owner))}</span>
+        <span class="tag">${escapeHtml(t("projectsPanel.bugs"))}: ${escapeHtml(String(record.bugs))}</span>
+        <span class="tag">${escapeHtml(t("projectsPanel.progress"))}: ${escapeHtml(formatPercent(record.progress))}</span>
+      </div>
+
+      <div class="progress-line">
+        <div class="progress-value" style="width: ${record.progress}%"></div>
+      </div>
+
+      <div class="skill-list">
+        ${record.workspaces.map((workspace) => `<span class="skill">${escapeHtml(workspace)}</span>`).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderProjectsOverviewContent() {
+  const records = state.projects.records;
+  const totalBugs = records.reduce((sum, record) => sum + record.bugs, 0);
+  const avgProgress = Math.round(records.reduce((sum, record) => sum + record.progress, 0) / records.length);
+
+  return `
+    <div class="stage-layout">
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("entries.portfolio"))}</p>
+        <h3>${escapeHtml(t("rail.projects"))}</h3>
+        <p>${escapeHtml(t("projectsPanel.portfolioIntro"))}</p>
+      </div>
+
+      ${renderStatsGrid([
+        {
+          label: t("projectsPanel.totalSurfaces"),
+          value: String(records.length),
+          note: getProjectName(records[0]),
+        },
+        {
+          label: t("projectsPanel.moduleCount"),
+          value: String(records.filter((record) => record.kind === "module").length),
+          note: t("entries.workspaceSurface"),
+        },
+        {
+          label: t("projectsPanel.openBugs"),
+          value: String(totalBugs),
+          note: roleLabel("reviewer"),
+        },
+        {
+          label: t("projectsPanel.avgProgress"),
+          value: formatPercent(avgProgress),
+          note: t("entries.stages"),
+        },
+      ])}
+
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("rail.projects"))}</p>
+        <div class="project-stack">
+          ${records.map((record) => renderProjectCard(record)).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderProjectDetailContent(recordId) {
+  const record = getProjectRecord(recordId);
+  if (!record) return "";
+
+  const childRecords = state.projects.records.filter((entry) => entry.parentId === record.id);
+
+  return `
+    <div class="stage-layout">
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(record.kind === "project" ? t("entries.portfolio") : t("entries.workspaceSurface"))}</p>
+        <h3>${escapeHtml(getProjectName(record))}</h3>
+        <p>${escapeHtml(getProjectSummary(record))}</p>
+        <div class="task-meta">
+          <span class="tag accent">${escapeHtml(getProjectStage(record))}</span>
+          <span class="tag">${escapeHtml(t("projectsPanel.owner"))}: ${escapeHtml(roleLabel(record.owner))}</span>
+          <span class="tag">${escapeHtml(t("projectsPanel.bugs"))}: ${escapeHtml(String(record.bugs))}</span>
+          <span class="tag">${escapeHtml(t("projectsPanel.progress"))}: ${escapeHtml(formatPercent(record.progress))}</span>
+        </div>
+        <div class="progress-line">
+          <div class="progress-value" style="width: ${record.progress}%"></div>
+        </div>
+      </div>
+
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("projectsPanel.workspaces"))}</p>
+        <div class="skill-list">
+          ${record.workspaces.map((workspace) => `<span class="skill">${escapeHtml(workspace)}</span>`).join("")}
+        </div>
+      </div>
+
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("projectsPanel.highlights"))}</p>
+        <div class="project-notes">
+          ${record.highlights
+            .map(
+              (note) => `
+                <article class="project-note">
+                  <p>${escapeHtml(pickText(note))}</p>
+                </article>
+              `
+            )
+            .join("")}
+        </div>
+      </div>
+
+      ${
+        childRecords.length
+          ? `
+            <div class="info-block">
+              <p class="eyebrow">${escapeHtml(t("stage.moduleBreakdown"))}</p>
+              <div class="project-stack">
+                ${childRecords.map((child) => renderProjectCard(child)).join("")}
+              </div>
+            </div>
+          `
+          : ""
+      }
+    </div>
+  `;
+}
+
+function renderUsageRows(rows, resolveName) {
+  const maxTokens = Math.max(...rows.map((row) => row.tokens));
+
+  return `
+    <div class="usage-stack">
+      ${rows
+        .map(
+          (row) => `
+            <article class="usage-row">
+              <div class="usage-row-head">
+                <strong>${escapeHtml(resolveName(row))}</strong>
+                <span>${escapeHtml(formatCompactNumber(row.tokens))} ${escapeHtml(t("usagePanel.tokens"))}</span>
+              </div>
+              <div class="usage-bar-track">
+                <div class="usage-bar-fill" style="width: ${(row.tokens / maxTokens) * 100}%"></div>
+              </div>
+              <div class="project-card-meta">
+                <span class="tag">${escapeHtml(t("usagePanel.cost"))}: ${escapeHtml(formatCurrency(row.cost))}</span>
+                <span class="tag">${escapeHtml(t("usagePanel.requests"))}: ${escapeHtml(String(row.requests))}</span>
+                <span class="tag">${escapeHtml(formatPercent(row.share))}</span>
+              </div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderUsageTeamContent() {
+  const teamRows = state.usage.team;
+  const totalTokens = teamRows.reduce((sum, row) => sum + row.tokens, 0);
+  const totalCost = teamRows.reduce((sum, row) => sum + row.cost, 0);
+  const topRow = [...teamRows].sort((a, b) => b.tokens - a.tokens)[0];
+
+  return `
+    <div class="stage-layout">
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("entries.teamUsage"))}</p>
+        <h3>${escapeHtml(t("usagePanel.byRole"))}</h3>
+        <p>${escapeHtml(t("usagePanel.teamIntro"))}</p>
+      </div>
+
+      ${renderStatsGrid([
+        {
+          label: t("usagePanel.totalTokens"),
+          value: formatCompactNumber(totalTokens),
+          note: t("usagePanel.byRole"),
+        },
+        {
+          label: t("usagePanel.estimatedCost"),
+          value: formatCurrency(totalCost),
+          note: t("rail.usage"),
+        },
+        {
+          label: t("usagePanel.topConsumer"),
+          value: roleLabel(topRow.id),
+          note: formatCompactNumber(topRow.tokens),
+        },
+        {
+          label: t("usagePanel.remoteShare"),
+          value: formatPercent(state.usage.budget.remoteShare),
+          note: t("usagePanel.routingMix"),
+        },
+      ])}
+
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("usagePanel.byRole"))}</p>
+        ${renderUsageRows(teamRows, (row) => roleLabel(row.id))}
+      </div>
+    </div>
+  `;
+}
+
+function renderUsageProjectContent() {
+  const projectRows = state.usage.projects;
+  const totalTokens = projectRows.reduce((sum, row) => sum + row.tokens, 0);
+  const totalCost = projectRows.reduce((sum, row) => sum + row.cost, 0);
+  const topRow = [...projectRows].sort((a, b) => b.tokens - a.tokens)[0];
+
+  return `
+    <div class="stage-layout">
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("entries.projectUsage"))}</p>
+        <h3>${escapeHtml(t("usagePanel.byProject"))}</h3>
+        <p>${escapeHtml(t("usagePanel.projectIntro"))}</p>
+      </div>
+
+      ${renderStatsGrid([
+        {
+          label: t("usagePanel.totalTokens"),
+          value: formatCompactNumber(totalTokens),
+          note: t("usagePanel.byProject"),
+        },
+        {
+          label: t("usagePanel.estimatedCost"),
+          value: formatCurrency(totalCost),
+          note: t("rail.projects"),
+        },
+        {
+          label: t("usagePanel.topConsumer"),
+          value: getProjectName(getProjectRecord(topRow.id)),
+          note: formatCompactNumber(topRow.tokens),
+        },
+        {
+          label: t("usagePanel.localShare"),
+          value: formatPercent(state.usage.budget.localShare),
+          note: t("usagePanel.routingMix"),
+        },
+      ])}
+
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("usagePanel.byProject"))}</p>
+        ${renderUsageRows(projectRows, (row) => getProjectName(getProjectRecord(row.id)))}
+      </div>
+    </div>
+  `;
+}
+
+function renderUsageBudgetContent() {
+  const budget = state.usage.budget;
+  const usedPercent = Math.round((budget.used / budget.cap) * 100);
+  const projectedPercent = Math.round((budget.projected / budget.cap) * 100);
+
+  return `
+    <div class="stage-layout">
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("entries.budget"))}</p>
+        <h3>${escapeHtml(t("usagePanel.monthlyBudget"))}</h3>
+        <p>${escapeHtml(t("usagePanel.budgetIntro"))}</p>
+      </div>
+
+      ${renderStatsGrid([
+        {
+          label: t("usagePanel.monthlyBudget"),
+          value: formatCompactNumber(budget.cap),
+          note: t("usagePanel.tokens"),
+        },
+        {
+          label: t("usagePanel.totalTokens"),
+          value: formatCompactNumber(budget.used),
+          note: formatPercent(usedPercent),
+        },
+        {
+          label: t("usagePanel.projectedUsage"),
+          value: formatCompactNumber(budget.projected),
+          note: formatPercent(projectedPercent),
+        },
+        {
+          label: t("usagePanel.routingMix"),
+          value: `${formatPercent(budget.remoteShare)} / ${formatPercent(budget.localShare)}`,
+          note: `${t("usagePanel.remoteShare")} / ${t("usagePanel.localShare")}`,
+        },
+      ])}
+
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("usagePanel.monthlyBudget"))}</p>
+        <div class="usage-budget-block">
+          <div class="usage-budget-line">
+            <div class="usage-row-head">
+              <strong>${escapeHtml(t("usagePanel.totalTokens"))}</strong>
+              <span>${escapeHtml(formatPercent(usedPercent))}</span>
+            </div>
+            <div class="usage-bar-track">
+              <div class="usage-bar-fill" style="width: ${usedPercent}%"></div>
+            </div>
+          </div>
+          <div class="usage-budget-line">
+            <div class="usage-row-head">
+              <strong>${escapeHtml(t("usagePanel.projectedUsage"))}</strong>
+              <span>${escapeHtml(formatPercent(projectedPercent))}</span>
+            </div>
+            <div class="usage-bar-track">
+              <div class="usage-bar-fill usage-bar-fill-warn" style="width: ${projectedPercent}%"></div>
+            </div>
+          </div>
+          <div class="project-card-meta">
+            <span class="tag">${escapeHtml(t("usagePanel.remoteShare"))}: ${escapeHtml(formatPercent(budget.remoteShare))}</span>
+            <span class="tag">${escapeHtml(t("usagePanel.localShare"))}: ${escapeHtml(formatPercent(budget.localShare))}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderOptionGroup(options, activeId, dataAttribute) {
   return `
     <div class="theme-switcher">
@@ -1324,6 +1975,11 @@ function renderStageContentBody() {
   if (workspace === "task" && entry === "overview") return renderTaskOverviewContent();
   if (workspace === "task" && entry === "stages") return renderStageFlowContent();
   if (workspace === "task" && entry === "timeline") return renderTimelineContent();
+  if (workspace === "projects" && entry === "portfolio") return renderProjectsOverviewContent();
+  if (workspace === "projects") return renderProjectDetailContent(entry);
+  if (workspace === "usage" && entry === "teamUsage") return renderUsageTeamContent();
+  if (workspace === "usage" && entry === "projectUsage") return renderUsageProjectContent();
+  if (workspace === "usage" && entry === "budget") return renderUsageBudgetContent();
   if (workspace === "settings" && entry === "theme") return renderThemeSettingsContent();
   if (workspace === "settings" && entry === "language") return renderLanguageSettingsContent();
 
@@ -1334,7 +1990,7 @@ function renderStage() {
   const workspace = getActiveWorkspace();
   const entry = getActiveEntry();
   const showTeamLayoutSwitch = state.activeWorkspace === "team" && getActiveEntryId() === "overview";
-  const showTaskMeta = !showTeamLayoutSwitch && state.activeWorkspace !== "settings";
+  const showTaskMeta = !showTeamLayoutSwitch && !["settings", "projects", "usage"].includes(state.activeWorkspace);
 
   workspaceStageContentEl.innerHTML = `
     <div class="stage-shell">

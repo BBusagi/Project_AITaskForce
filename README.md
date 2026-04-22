@@ -1,92 +1,132 @@
 # AI Task Force
 
-AI Task Force 是一个面向文本任务的多 Agent 协作工作系统。
+AI Task Force is a multi-agent workspace MVP for text tasks.
 
-系统目标不是做一个泛化的自治 Agent 平台，而是先把一条固定且可观察的协作流做扎实：
+The goal is not to build a general autonomous agent platform first. The goal is to make one fixed, inspectable, product-grade collaboration flow feel real:
 
-`User → Leader → Planner → Writer → Reviewer → Leader Final Response`
+`User -> Leader -> Planner -> Writer -> Reviewer -> Leader Final Response`
 
-当前仓库已经按客户端类型拆分，分别承载不同的 MVP 验证目标。
+The repository currently contains two clients under one shared product model:
 
-## 仓库结构
+- `Clients/Web` for the browser workspace MVP
+- `Clients/Desktop` for the Electron-style desktop shell prototype
+
+## Product Direction
+
+AI Task Force should feel like an AI team workspace, not a plain chatbot.
+
+Users should be able to:
+
+- submit work through chat
+- see which agent currently owns the task
+- inspect the workflow stage and task history
+- drill into team members, projects, and usage
+- review intermediate and final outputs
+
+## Current Product Signature
+
+One product pattern is important enough to call out explicitly because it has become part of the identity of the Desktop client:
+
+- `Team` is not just a flat agent list
+- it opens with a workspace-level `Overview` conversation and summary surface
+- the user can then drill down into individual agents from the same sidebar tree
+
+This `overview first, agent drilldown second` structure is now a product feature. It frames the AI team as one coordinated unit before exposing each specialist.
+
+## Repository Structure
 
 - [Agents.md](/mnt/d/GitProject/Project_AITaskForce/Agents.md)
-  共享产品规范、Agent 角色设计、数据模型、API 和前端约定。
+  Shared product spec, workflow rules, client split, and implementation status.
 - [Clients/Web](/mnt/d/GitProject/Project_AITaskForce/Clients/Web)
-  浏览器端 MVP，用来验证多 Agent 工作台的信息架构、任务流展示、时间线和历史视图。
+  Browser MVP for the shared workspace model.
 - [Clients/Desktop](/mnt/d/GitProject/Project_AITaskForce/Clients/Desktop)
-  Electron 桌面端，用来验证“启动即对话”的本地桌面体验，核心入口是 `Leader` 会话窗口。
+  Desktop shell prototype with outer rail navigation and dialogue-first interaction.
 
-## 客户端定位
+## Desktop Status
+
+The current Desktop prototype is no longer an internal dashboard page. It is a full-window shell with:
+
+- full-height outer app layout
+- fixed left rail navigation
+- collapsible middle resource sidebar
+- right-side full workspace stage
+
+Current top-level Desktop workspaces:
+
+- `Chat`
+- `Team`
+- `Task`
+- `Projects`
+- `Usage`
+- `Settings`
+
+Current Desktop capabilities:
+
+- dialogue-first shell with `Leader` thread and task compose flow
+- `Team` workspace with `Overview` plus per-agent drilldown
+- list and grid views for team overview
+- person-style SVG role icons for agents
+- `Projects` workspace for project and module-level tracking
+- `Usage` workspace for token and cost visualization by team and by project
+- `Settings` workspace with theme switching
+- `Settings` workspace with interface language switching
+- English default UI with optional Simplified Chinese
+
+## Web Status
+
+The current Web client remains a static MVP focused on the shared task workspace model:
+
+- task input
+- agent workspace structure
+- task timeline and event log
+- task history and detail-oriented browsing
+
+## What Is Implemented Today
+
+- repository split into `Clients/Web` and `Clients/Desktop`
+- static Web MVP prototype
+- Electron-ready Desktop prototype shell
+- shared multi-agent product framing across both clients
+- mock task progression in the frontend
+- mock team, project, and usage data in the Desktop client
+
+## What Is Not Implemented Yet
+
+- real orchestrator service
+- real backend API
+- persistent storage
+- GPT / Ollama gateway integration
+- live token telemetry
+- shared backend state between Web and Desktop
+
+## Run
 
 ### Web
 
-Web 端负责验证工作台式体验，重点是：
-
-- 任务输入
-- Agent 面板
-- 子任务拆解
-- Timeline / Event Log
-- Task History
-- Task Detail
-
-入口文件：
-
-- [Clients/Web/index.html](/mnt/d/GitProject/Project_AITaskForce/Clients/Web/index.html)
-- [Clients/Web/app.js](/mnt/d/GitProject/Project_AITaskForce/Clients/Web/app.js)
-- [Clients/Web/styles.css](/mnt/d/GitProject/Project_AITaskForce/Clients/Web/styles.css)
-
-### Desktop
-
-Desktop 端负责验证对话优先的桌面形态，重点是：
-
-- 启动即进入 `User ↔ Leader` 对话区域
-- 右侧固定 `Team / Task / Chat` 三个子面板
-- `Team` 展示 agent 职责、当前任务、状态和 skills
-- `Task` 展示当前任务和执行阶段
-- `Chat` 用于继续发任务或询问现状
-
-入口文件：
-
-- [Clients/Desktop/index.html](/mnt/d/GitProject/Project_AITaskForce/Clients/Desktop/index.html)
-- [Clients/Desktop/app.js](/mnt/d/GitProject/Project_AITaskForce/Clients/Desktop/app.js)
-- [Clients/Desktop/styles.css](/mnt/d/GitProject/Project_AITaskForce/Clients/Desktop/styles.css)
-- [Clients/Desktop/package.json](/mnt/d/GitProject/Project_AITaskForce/Clients/Desktop/package.json)
-
-## 启动方式
-
-### Web MVP
-
-直接打开 [Clients/Web/index.html](/mnt/d/GitProject/Project_AITaskForce/Clients/Web/index.html) 即可预览。
-
-如果需要本地静态服务：
+Open [Clients/Web/index.html](/mnt/d/GitProject/Project_AITaskForce/Clients/Web/index.html) directly, or serve the repository statically:
 
 ```bash
 python3 -m http.server 8000
 ```
 
-然后访问 `http://localhost:8000/Clients/Web/`
+Then open `http://localhost:8000/Clients/Web/`
 
-### Desktop Electron
+### Desktop
 
-进入 `Clients/Desktop` 后执行：
+From `Clients/Desktop`:
 
 ```bash
 npm install
 npm start
 ```
 
-## 当前实现状态
+## Current Development Focus
 
-- 已完成 Web 和 Desktop 的目录拆分
-- 已完成 Web 端静态 MVP 原型
-- 已完成 Desktop 端 Electron-ready 原型
-- 两端目前都基于 mock 数据和前端本地状态推进任务流
-- 真实 orchestrator、API、存储和模型网关尚未接入
+The current priority is still frontend-first validation:
 
-## 开发约定
+- make the system feel like a real AI team product
+- keep the workflow easy to inspect
+- make the Desktop shell feel like a real client app
+- keep Web and Desktop aligned to the same product vocabulary
 
-- 共享产品规则、Agent 流程和数据模型统一以 [Agents.md](/mnt/d/GitProject/Project_AITaskForce/Agents.md) 为准
-- Web 和 Desktop 保持独立入口，不共用单一 HTML 启动文件
-- Web 优先验证工作台结构，Desktop 优先验证对话入口体验
-- 接真实后端后，两端应共享任务状态语义，但各自维护独立 UI 状态层
+Backend integration remains the next major phase after the frontend shell and information architecture stabilize.

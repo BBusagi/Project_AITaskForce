@@ -1,836 +1,430 @@
 # Agents Doc
 
-## Project: Multi-Agent Task Workspace MVP
+## Project
 
-## 1. Project Goal
+Multi-Agent Task Workspace MVP
 
-Build an MVP product for a **multi-agent text task processing system**.
+## 1. Goal
 
-This project now has **two frontend clients** under one shared product model:
+Build an MVP for a multi-agent text task processing system.
 
-* `Clients/Web` for the browser-based workspace MVP
-* `Clients/Desktop` for the Electron desktop dialogue-first app
+The system should feel like an AI team workspace, not a general chatbot and not a free-form autonomous agent platform.
 
-The system should feel like an **AI team management workspace**, not a plain chatbot.
+The first product goal is:
 
-Users can:
+> make the system feel like an AI team workspace
 
-* submit one or more text tasks through chat
-* view how the leader agent decomposes tasks
-* observe task flow and agent assignments
-* inspect outputs from planner / writer / reviewer
-* see final merged results
-* review historical tasks and task timelines
+Not:
 
-This is **not** a general autonomous AI platform yet.
-This MVP is a **structured workflow-based task system** for text processing.
+> build a general autonomous agent platform
 
-The product spec, agent roles, data model, and API semantics are shared by both clients.
+This repository currently has two frontend clients under one shared product model:
 
----
+- `Clients/Web`
+- `Clients/Desktop`
+
+Both clients should share:
+
+- task states
+- agent roles
+- event semantics
+- API contract
+
+They may differ in:
+
+- layout
+- navigation model
+- local UI state
+- emphasis of the user journey
 
 ## 2. Product Positioning
 
-This product is a combination of:
+The product sits at the intersection of:
 
-* chat interface
-* task management board
-* agent organization dashboard
+- chat
+- task management
+- team coordination
+- workflow inspection
 
 Core user perception:
 
 > The user gives work to an AI team.
-> The team leader decomposes the task and assigns it to specialist agents.
-> The user can inspect progress, reasoning stages, and final output.
+> The leader decomposes the task and routes it through specialist agents.
+> The user can inspect ownership, progress, and outputs at every stage.
 
----
+## 3. Product Signature
 
-## 3. MVP Scope
+The current Desktop prototype has surfaced a product pattern that should be treated as a feature, not just a temporary layout choice.
+
+### 3.1 Overview-First Team Workspace
+
+`Team` should open to a workspace-level `Overview` first.
+
+From there, the user should drill into individual agents through the same sidebar tree.
+
+Why this matters:
+
+- it presents the AI team as one coordinated unit
+- it gives the user a stable shared context before role-level detail
+- it avoids making the product feel like a flat roster of disconnected bots
+
+This pattern should be preserved as the product evolves.
+
+### 3.2 Desktop Shell Model
+
+The Desktop client should feel like a real client app shell, closer to Slack or VS Code than to a dashboard landing page.
+
+Key shell rules:
+
+- full-window layout
+- fixed outer left rail
+- fixed-width collapsible middle sidebar
+- full workspace stage on the right
+- scrolling contained within each region
+- no centered dashboard container
+- no outer rounded card wrapping the whole app
+
+### 3.3 Operational Workspaces Beyond Chat
+
+The Desktop client is no longer only a chat surface.
+
+The shell now includes product-level operational workspaces:
+
+- `Team`
+- `Task`
+- `Projects`
+- `Usage`
+- `Settings`
+
+This is intentional. The product should expose not only conversation, but also coordination, project context, and model consumption.
+
+## 4. MVP Scope
 
 ### In Scope
 
-* text-based task input
-* fixed multi-agent workflow
-* task lifecycle tracking
-* agent status display
-* timeline / event log
-* task detail page
-* browser workspace MVP under `Clients/Web`
-* Electron desktop app under `Clients/Desktop`
-* mixed model routing:
-
-  * local model for drafting
-  * remote GPT API for planning/review/final synthesis
+- text-based task input
+- fixed multi-agent workflow
+- task lifecycle tracking
+- agent status display
+- timeline and event log
+- task detail inspection
+- browser workspace MVP under `Clients/Web`
+- desktop shell prototype under `Clients/Desktop`
+- mixed model routing design
+- project-level context surfaces
+- usage and token consumption surfaces
+- theme switching
+- UI language switching
 
 ### Out of Scope
 
-* code execution sandbox
-* file system editing
-* retrieval system / RAG
-* enterprise auth / RBAC
-* multi-tenant support
-* dynamic autonomous agent creation
-* drag-and-drop workflow builder
-* advanced analytics dashboard
+- code execution sandbox
+- file editing tools inside the product
+- RAG and retrieval systems
+- enterprise auth
+- multi-tenant support
+- dynamic agent creation
+- arbitrary workflow builder
+- production analytics pipeline
 
----
+## 5. Agent Architecture
 
-## 4. Agent Architecture
-
-### 4.1 Agent Roles
-
-#### Leader Agent
+### Leader
 
 Responsibilities:
 
-* receive user task
-* create top-level task record
-* decide workflow start
-* call planner
-* collect outputs from writer/reviewer
-* produce final response to user
+- receive the user task
+- create the top-level task record
+- start the workflow
+- call planner
+- collect downstream outputs
+- deliver the final answer
 
 Recommended model:
 
-* remote GPT API
+- remote GPT API
 
----
-
-#### Planner Agent
+### Planner
 
 Responsibilities:
 
-* convert user task into structured subtasks
-* define objective, constraints, output format
-* decide which subtask goes to which specialist agent
+- convert the user task into structured subtasks
+- define objective, constraints, and output format
+- decide which specialist role should handle each step
 
 Recommended model:
 
-* remote GPT API
+- remote GPT API
 
----
-
-#### Writer Agent
+### Writer
 
 Responsibilities:
 
-* generate first draft
-* perform text rewriting, summarization, translation, formatting
-* produce structured content for reviewer
+- generate the first draft
+- perform summarization, rewriting, translation, and formatting
+- produce structured content for review
 
 Recommended model:
 
-* local Qwen via Ollama
+- local Qwen via Ollama
 
----
-
-#### Reviewer Agent
+### Reviewer
 
 Responsibilities:
 
-* inspect writer output
-* check completeness, clarity, consistency, instruction adherence
-* approve or reject draft
-* if rejected, return review comments
+- inspect writer output
+- check completeness, clarity, consistency, and instruction adherence
+- approve or reject the draft
+- return revision guidance when needed
 
 Recommended model:
 
-* remote GPT API
+- remote GPT API
 
----
-
-#### Optional Summarizer Agent
+### Optional Summarizer
 
 Responsibilities:
 
-* shorten intermediate content for display
-* generate compact timeline summaries
+- shorten intermediate content for display
+- generate compact summaries for timeline or overview surfaces
 
 Recommended model:
 
-* local Qwen via Ollama
+- local Qwen via Ollama
 
----
+## 6. Workflow Model
 
-### 4.2 Workflow Model
-
-For MVP, do **not** implement dynamic free-form multi-agent autonomy.
-
-Use a **fixed orchestration flow**:
+MVP should use a fixed orchestration flow:
 
 ```text
 User Input
-→ Leader
-→ Planner
-→ Writer
-→ Reviewer
-→ Leader Final Response
+-> Leader
+-> Planner
+-> Writer
+-> Reviewer
+-> Leader Final Response
 ```
 
 If review fails:
 
 ```text
 Writer Revision
-→ Reviewer Re-check
-→ Leader Final Response
+-> Reviewer Re-check
+-> Leader Final Response
 ```
 
-Limit revision loop to:
+Revision loop limit:
 
-* max 1 retry in MVP
+- max 1 retry in MVP
 
----
-
-## 5. Model Routing Strategy
+## 7. Routing Strategy
 
 ### Remote GPT API
 
 Use for:
 
-* Leader
-* Planner
-* Reviewer
-* Final synthesis
+- Leader
+- Planner
+- Reviewer
+- final synthesis
 
 ### Local Ollama + Qwen
 
 Use for:
 
-* Writer
-* Summarizer
-* low-risk bulk text processing
+- Writer
+- Summarizer
+- low-risk bulk text processing
 
 ### Routing Principle
 
-* high-risk / high-judgment tasks → GPT
-* high-frequency / draft generation tasks → Qwen
-* final user-facing quality gate → GPT
+- high-judgment tasks -> GPT
+- high-frequency drafting -> Qwen
+- final user-facing quality gate -> GPT
 
----
+## 8. Shared Data Model
 
-## 6. System Modules
+Shared domain objects still center on:
 
-### 6.1 Frontend
+- `Agent`
+- `Task`
+- `Subtask`
+- `TaskEvent`
+- `ConversationMessage`
 
-Main modules:
+The frontend may add client-local presentation models for:
 
-* Chat Workspace
-* Agent Panel
-* Task Timeline Panel
-* Task History
-* Task Detail View
+- project summaries
+- module surfaces
+- token usage summaries
+- shell preferences such as theme and language
 
-Suggested stack:
+These presentation models should not replace the core task model.
 
-* React + TypeScript
-* Tailwind
-* state management: lightweight preferred
-* polling first, websocket optional later
+## 9. Frontend Client Split
 
-### 6.1.1 Client Split
+### 9.1 Web
 
-The repository should keep frontend work split by client:
+The Web client remains the browser workspace MVP.
 
-* `Clients/Web`
-  browser-based MVP workspace
-* `Clients/Desktop`
-  Electron desktop app with dialogue-first layout
+Primary focus:
 
-Both clients should follow the same:
+- task input
+- agent workspace structure
+- timeline and history
+- task detail inspection
 
-* task states
-* agent roles
-* event semantics
-* API contract
+### 9.2 Desktop
 
-But they may use different:
+The Desktop client is a dialogue-first shell, but it is no longer limited to three panels.
 
-* entry points
-* layout priorities
-* component structure
-* local UI state
+Current top-level Desktop workspaces:
 
----
+- `Chat`
+- `Team`
+- `Task`
+- `Projects`
+- `Usage`
+- `Settings`
 
-### 6.2 Backend
+Current Desktop shell expectations:
 
-Main modules:
+- launch directly into a workspace shell
+- use outer left rail for workspace switching
+- use collapsible middle sidebar as the workspace tree
+- render the selected content in the right-side stage
 
-* Task API
-* Agent Orchestrator
-* Event Logger
-* Model Gateway
-* Task Storage
+### 9.3 Desktop Workspace Requirements
 
-Suggested stack:
-
-* Python FastAPI or Node.js Express/Nest
-* SQLite/Postgres for storage
-* simple async job handling
-* no heavy distributed architecture in MVP
-
----
+#### Chat
 
-### 6.3 Model Gateway
+Should contain:
 
-Responsibilities:
+- leader thread
+- task compose surface
+- quick progress questions
 
-* abstract model calls
-* unify GPT API and Ollama API
-* expose a common interface:
-
-  * generateText(role, prompt, modelClass)
-
-Model classes:
-
-* planner
-* writer
-* reviewer
-* leader
-
----
-
-## 7. Data Models
-
-## 7.1 Agent
-
-```ts
-type AgentStatus = "idle" | "working" | "waiting" | "error";
-
-interface Agent {
-  id: string;
-  name: string;
-  role: "leader" | "planner" | "writer" | "reviewer" | "summarizer";
-  description: string;
-  modelProvider: "gpt" | "ollama";
-  modelName: string;
-  status: AgentStatus;
-  currentTaskId?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-```
-
----
-
-## 7.2 Task
-
-```ts
-type TaskStatus =
-  | "pending"
-  | "planning"
-  | "writing"
-  | "reviewing"
-  | "revising"
-  | "completed"
-  | "failed";
-
-interface Task {
-  id: string;
-  title: string;
-  userInput: string;
-  status: TaskStatus;
-  priority: "low" | "medium" | "high";
-  createdBy: string;
-  assignedLeaderId: string;
-  finalOutput?: string | null;
-  errorMessage?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-```
-
----
-
-## 7.3 Subtask
-
-```ts
-type SubtaskStatus =
-  | "pending"
-  | "running"
-  | "completed"
-  | "failed"
-  | "rejected";
-
-interface Subtask {
-  id: string;
-  taskId: string;
-  type: "plan" | "draft" | "review" | "revise" | "summary";
-  assignedAgentId: string;
-  inputText: string;
-  outputText?: string | null;
-  reviewComment?: string | null;
-  status: SubtaskStatus;
-  sequence: number;
-  createdAt: string;
-  updatedAt: string;
-}
-```
-
----
-
-## 7.4 Event / Timeline
-
-```ts
-type EventType =
-  | "task_created"
-  | "task_started"
-  | "task_assigned"
-  | "planning_started"
-  | "planning_completed"
-  | "writing_started"
-  | "writing_completed"
-  | "review_started"
-  | "review_passed"
-  | "review_failed"
-  | "revision_started"
-  | "revision_completed"
-  | "final_output_ready"
-  | "task_failed";
-
-interface TaskEvent {
-  id: string;
-  taskId: string;
-  subtaskId?: string | null;
-  actorType: "user" | "agent" | "system";
-  actorId?: string | null;
-  eventType: EventType;
-  message: string;
-  metadata?: Record<string, any>;
-  createdAt: string;
-}
-```
+#### Team
 
----
+Should contain:
 
-## 7.5 Conversation Message
+- `Overview` as the default entry
+- per-agent drilldown entries
+- role, status, current responsibility, and skills
+- list and grid presentation modes for overview
 
-```ts
-interface ConversationMessage {
-  id: string;
-  taskId: string;
-  senderType: "user" | "leader" | "system";
-  senderId?: string | null;
-  content: string;
-  createdAt: string;
-}
-```
+#### Task
 
----
+Should contain:
 
-## 8. API Design
+- current task summary
+- stage flow
+- timeline
 
-## 8.1 Create Task
+#### Projects
 
-`POST /api/tasks`
+Should contain:
 
-Request:
+- project-level management surface
+- module-level workspace breakdown
+- basic project information
+- current development stage
+- bug counts
+- progress indicators
 
-```json
-{
-  "title": "Summarize meeting notes",
-  "userInput": "Please summarize this meeting and produce EN/JP output.",
-  "priority": "medium"
-}
-```
+#### Usage
 
-Response:
+Should contain:
 
-```json
-{
-  "taskId": "task_001",
-  "status": "pending"
-}
-```
+- token usage by team member
+- token usage by project or module
+- cost summary
+- budget and routing mix view
 
----
+#### Settings
 
-## 8.2 Get Task List
+Should contain:
 
-`GET /api/tasks`
+- theme selection
+- language selection
 
-Returns task summaries.
+## 10. Current Prototype Status
 
----
+### Implemented Now
 
-## 8.3 Get Task Detail
+- repository split between Web and Desktop
+- static Web MVP
+- Electron-ready Desktop shell prototype
+- full-window Desktop shell layout
+- outer rail navigation
+- collapsible middle sidebar
+- right-side workspace stage
+- Team overview plus agent drilldown pattern
+- project workspace prototype
+- usage workspace prototype
+- theme switching
+- English default UI
+- optional Simplified Chinese UI
 
-`GET /api/tasks/:taskId`
+### Not Implemented Yet
 
-Returns:
+- real backend API
+- persistent task storage
+- real orchestrator
+- real model gateway
+- live usage telemetry
+- synchronized state across both clients
 
-* task info
-* subtasks
-* final output
-* latest status
+## 11. Development Order
 
----
+### Phase 1
 
-## 8.4 Get Task Events
+- define schemas
+- split repo into `Clients/Web` and `Clients/Desktop`
+- build mock clients
 
-`GET /api/tasks/:taskId/events`
+### Phase 2
 
-Returns ordered timeline entries.
+- build Desktop shell
+- build Team overview and drilldown
+- build Task workspace surfaces
+- build project and usage workspace prototypes
+- add theme and language settings
 
----
+### Phase 3
 
-## 8.5 Get Conversation
+- build mock API
+- implement orchestrator
+- connect GPT and Ollama routing
+- persist tasks, subtasks, and events
 
-`GET /api/tasks/:taskId/messages`
+### Phase 4
 
-Returns task-related chat/event messages.
+- connect both clients to shared backend
+- replace mock usage data with telemetry
+- replace mock project summaries with real project state
+- improve prompts, error handling, and workflow reliability
 
----
+## 12. Acceptance Direction
 
-## 8.6 Get Agents
+The MVP should be considered directionally successful when:
 
-`GET /api/agents`
+1. a user can create a text task from Web or Desktop
+2. the system shows task ownership and stage clearly
+3. the Leader -> Planner -> Writer -> Reviewer flow is inspectable
+4. Desktop feels like a real client shell, not an internal dashboard
+5. Team opens with Overview before individual agent drilldown
+6. project context can be surfaced alongside task context
+7. usage context can be surfaced alongside task context
+8. shared product language remains aligned between Web and Desktop
 
-Returns current registered agents and statuses.
-
----
-
-## 8.7 Retry Failed Review
-
-`POST /api/tasks/:taskId/retry`
-
-Triggers one more writer-review cycle.
-
----
-
-## 9. Frontend Requirements
-
-## 9.1 Shared Frontend Rules
-
-Both clients should:
-
-* expose the current task stage clearly
-* show which agent is working on what
-* make task progression inspectable
-* preserve a conversation-style entry point for task submission
-* use the same task and event vocabulary from the API model
-
----
-
-## 9.2 Web Client Requirements
-
-The Web MVP under `Clients/Web` should use a **3-column workspace layout**.
-
-### Left Panel: Agent Organization
-
-Display:
-
-* agent list
-* role
-* current status
-* current task
-* model source or skill tags
-
-### Center Panel: Chat + Task Input
-
-Display:
-
-* conversation thread
-* task creation input
-* system progress messages
-* leader updates
-* subtask board
-
-### Right Panel: Task Progress / Timeline
-
-Display:
-
-* current task stage
-* subtask progress
-* event log
-* history entry points
-* final output or task detail summary
-
-### Suggested Web Views
-
-* Dashboard
-* Workspace
-* Task Detail
-* Task History
-* Agents
-
----
-
-## 9.3 Desktop Client Requirements
-
-The Desktop app under `Clients/Desktop` should open directly into a **dialogue-first window**.
-
-### Main Area
-
-Display:
-
-* conversation between user and Leader agent
-* current task banner
-* current workflow stage summary
-
-### Sidebar
-
-Sidebar must contain exactly these 3 panels for MVP:
-
-* `Team`
-* `Task`
-* `Chat`
-
-### Team Panel
-
-Display:
-
-* current agents in the AI team
-* each agent's responsibility
-* current task
-* status
-* included skills
-
-### Task Panel
-
-Display:
-
-* current user task
-* current execution stage
-* stage owner
-* simple progress indication
-
-### Chat Panel
-
-Display:
-
-* input to publish a new task to Leader
-* quick actions to ask current progress
-* quick actions to ask who is currently responsible
-
----
-
-## 10. UI Behavior
-
-### Task Submission Flow
-
-When the user submits a task:
-
-1. create task immediately
-2. append user message to conversation
-3. show system message: "Leader received task"
-4. backend starts workflow
-5. UI polls for updates every few seconds
-
-### Timeline Rendering
-
-Every backend state change should create an event.
-Frontend renders events in chronological order.
-
-For Desktop MVP, the same status change should also immediately update:
-
-* Team panel statuses
-* Task panel stage
-* Leader conversation updates
-
-### Status Display
-
-Use clear labels:
-
-* Pending
-* Planning
-* Writing
-* Reviewing
-* Revising
-* Completed
-* Failed
-
-### Final Output
-
-Task detail page should clearly separate:
-
-* user request
-* planner breakdown
-* writer draft
-* reviewer judgment
-* final answer
-
----
-
-## 11. Backend Orchestration Logic
-
-Implement a simple orchestrator service.
-
-Pseudo flow:
-
-```text
-create task
-log task_created
-
-leader receives task
-log task_started
-
-planner generates structured plan
-create subtask(plan)
-log planning_started / planning_completed
-
-writer generates draft
-create subtask(draft)
-log writing_started / writing_completed
-
-reviewer checks draft
-create subtask(review)
-log review_started
-
-if approved:
-    log review_passed
-    leader generates final output
-    save final output
-    log final_output_ready
-    set task completed
-else:
-    log review_failed
-    if retry count < 1:
-        writer revises using review comments
-        reviewer re-checks
-    else:
-        set task failed
-```
-
----
-
-## 12. Prompting Rules
-
-### General
-
-* all agent outputs should be concise and structured
-* use deterministic structured formatting where possible
-* do not allow free-form rambling in planner/reviewer outputs
-
-### Planner Output Schema
-
-Planner should return:
-
-* task objective
-* key constraints
-* expected output format
-* execution steps
-* assigned role suggestions
-
-### Writer Output Schema
-
-Writer should return:
-
-* draft content only
-* no hidden analysis
-* respect requested language and format
-
-### Reviewer Output Schema
-
-Reviewer should return:
-
-* result: pass/fail
-* issues found
-* revision guidance
-* concise rationale
-
----
-
-## 13. Engineering Constraints
-
-### MVP Simplicity Rules
-
-* do not implement websocket first
-* use polling
-* do not implement authentication first
-* do not implement dynamic agent spawning
-* do not implement tool-use-heavy autonomous behavior
-* do not implement arbitrary workflow builder
-* do not implement advanced queue infra
-
-### Prioritize
-
-* correctness of state transitions
-* clean data model
-* inspectable timeline
-* understandable UI
-* stable API contract
-
----
-
-## 14. Development Order
-
-## Phase 1
-
-* define schemas
-* split repo into `Clients/Web` and `Clients/Desktop`
-* build mock frontend clients with mock data
-
-## Phase 2
-
-* implement Web task creation
-* implement Web agent list
-* implement Web timeline rendering
-* implement Desktop dialogue-first shell
-
-## Phase 3
-
-* build mock API
-* implement orchestrator with fixed flow
-* connect GPT and Ollama gateway
-* persist task/subtask/events
-
-## Phase 4
-
-* connect both clients to shared API
-* implement review retry
-* improve prompts
-* polish UI
-* improve error handling
-
----
-
-## 15. Acceptance Criteria
-
-MVP is considered complete when:
-
-1. user can create a text task from Web or Desktop UI
-2. system creates a task record and shows it immediately
-3. leader/planner/writer/reviewer flow can run end to end
-4. task status updates are visible in both clients
-5. timeline events are visible in the Web workspace
-6. Desktop app opens into the Leader dialogue window
-7. Desktop sidebar shows `Team / Task / Chat`
-8. task detail page shows intermediate outputs
-9. at least one review fail/retry path works
-10. local and remote model routing both work
-
----
-
-## 16. Nice-to-Have After MVP
-
-* websocket streaming updates
-* manual reassign to different agent
-* user-selectable quality/cost mode
-* forced local-only / GPT-only mode
-* task templates
-* upload text files
-* export final output
-* agent performance stats
-
----
-
-## 17. Notes for AI Coding Agent
+## 13. Notes For AI Coding Agents
 
 When implementing:
 
-* start from schema-first design
-* keep orchestration deterministic
-* use mock data first
-* keep Web and Desktop clients separate in directory structure
-* keep UI clean and functional
-* avoid overengineering
-* prioritize end-to-end demo completion over architectural perfection
-
-The first goal is:
-
-> make the system feel like an AI team workspace
-
-Not:
-
-> build a full autonomous agent platform
+- protect the overview-first Team pattern
+- preserve the full-window Desktop shell model
+- do not collapse the product back into a centered dashboard page
+- keep project and usage surfaces operational, not marketing-oriented
+- keep the shared task vocabulary aligned across both clients
+- prioritize end-to-end inspectability over abstraction purity
