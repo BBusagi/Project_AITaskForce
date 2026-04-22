@@ -23,6 +23,10 @@ This repository currently has two frontend clients under one shared product mode
 - `Clients/Web`
 - `Clients/Desktop`
 
+The repository now also includes:
+
+- `Server` for a minimal in-memory backend and Ollama integration path
+
 Both clients should share:
 
 - task states
@@ -353,6 +357,7 @@ Should contain:
 ### Implemented Now
 
 - repository split between Web and Desktop
+- minimal backend under `Server`
 - static Web MVP
 - Electron-ready Desktop shell prototype
 - full-window Desktop shell layout
@@ -365,15 +370,17 @@ Should contain:
 - theme switching
 - English default UI
 - optional Simplified Chinese UI
+- in-memory task API and orchestration flow
+- Ollama-backed writer route
+- Desktop polling against backend task snapshots when the API is available
 
 ### Not Implemented Yet
 
-- real backend API
 - persistent task storage
-- real orchestrator
-- real model gateway
+- remote GPT routing for leader, planner, and reviewer
 - live usage telemetry
-- synchronized state across both clients
+- full backend integration in the Web client
+- synchronized shared state across both clients
 
 ## 11. Development Order
 
@@ -393,10 +400,9 @@ Should contain:
 
 ### Phase 3
 
-- build mock API
-- implement orchestrator
-- connect GPT and Ollama routing
 - persist tasks, subtasks, and events
+- extend the current backend beyond in-memory state
+- connect GPT routing alongside the local Ollama writer path
 
 ### Phase 4
 

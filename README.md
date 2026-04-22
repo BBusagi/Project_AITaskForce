@@ -10,6 +10,7 @@ The repository currently contains two clients under one shared product model:
 
 - `Clients/Web` for the browser workspace MVP
 - `Clients/Desktop` for the Electron-style desktop shell prototype
+- `Server` for the minimal ATF backend and Ollama integration layer
 
 ## Product Direction
 
@@ -41,6 +42,8 @@ This `overview first, agent drilldown second` structure is now a product feature
   Browser MVP for the shared workspace model.
 - [Clients/Desktop](/mnt/d/GitProject/Project_AITaskForce/Clients/Desktop)
   Desktop shell prototype with outer rail navigation and dialogue-first interaction.
+- [Server](/mnt/d/GitProject/Project_AITaskForce/Server)
+  Minimal backend with in-memory orchestration, task APIs, and Ollama model routing.
 
 ## Desktop Status
 
@@ -63,6 +66,7 @@ Current top-level Desktop workspaces:
 Current Desktop capabilities:
 
 - dialogue-first shell with `Leader` thread and task compose flow
+- backend-first task submission with fallback to local mock flow
 - `Team` workspace with `Overview` plus per-agent drilldown
 - list and grid views for team overview
 - person-style SVG role icons for agents
@@ -84,20 +88,21 @@ The current Web client remains a static MVP focused on the shared task workspace
 ## What Is Implemented Today
 
 - repository split into `Clients/Web` and `Clients/Desktop`
+- minimal backend under `Server`
 - static Web MVP prototype
 - Electron-ready Desktop prototype shell
 - shared multi-agent product framing across both clients
-- mock task progression in the frontend
+- in-memory task orchestration API
+- Ollama-backed writer route in the backend
+- Desktop polling against backend task snapshots when the API is available
 - mock team, project, and usage data in the Desktop client
 
 ## What Is Not Implemented Yet
 
-- real orchestrator service
-- real backend API
 - persistent storage
-- GPT / Ollama gateway integration
+- remote GPT routing for leader / planner / reviewer
 - live token telemetry
-- shared backend state between Web and Desktop
+- full backend integration in the Web client
 
 ## Run
 
@@ -120,6 +125,46 @@ npm install
 npm start
 ```
 
+### Server
+
+From `Server`:
+
+```bash
+npm start
+```
+
+Default backend URL:
+
+```text
+http://127.0.0.1:8787
+```
+
+Expected Ollama URL:
+
+```text
+http://127.0.0.1:11434
+```
+
+Default editable backend config:
+
+```text
+Server/atf.config.js
+```
+
+Current default local writer model:
+
+```text
+qwen3:8b
+```
+
+Optional environment variables:
+
+```bash
+set OLLAMA_BASE_URL=http://127.0.0.1:11434
+set ATF_OLLAMA_WRITER_MODEL=qwen2.5:7b
+set ATF_SERVER_PORT=8787
+```
+
 ## Current Development Focus
 
 The current priority is still frontend-first validation:
@@ -127,6 +172,8 @@ The current priority is still frontend-first validation:
 - make the system feel like a real AI team product
 - keep the workflow easy to inspect
 - make the Desktop shell feel like a real client app
+- move from in-memory backend state to persistent task storage
+- extend model routing beyond the local writer path
 - keep Web and Desktop aligned to the same product vocabulary
 
-Backend integration remains the next major phase after the frontend shell and information architecture stabilize.
+The next backend phase is persistence, richer model routing, and shared client integration instead of frontend-only local state.

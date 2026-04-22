@@ -1,7 +1,10 @@
 const phases = ["pending", "planning", "writing", "reviewing", "completed"];
+const ROUTABLE_AGENT_IDS = new Set(["leader", "planner", "writer", "reviewer"]);
 
 const THEME_STORAGE_KEY = "atf-desktop-theme";
 const LANGUAGE_STORAGE_KEY = "atf-desktop-language";
+const API_BASE_URL = "http://127.0.0.1:8787/api";
+const TASK_POLL_INTERVAL_MS = 1500;
 
 const dictionaries = {
   en: {
@@ -134,6 +137,12 @@ const dictionaries = {
       list: "List",
       grid: "Grid",
       progress: "Progress",
+      model: "Model",
+      modelRoute: "Model Route",
+      connected: "Ollama Connected",
+      disconnected: "Ollama Unavailable",
+      noModels: "No models found",
+      syncFailed: "Model update failed",
     },
     projectsPanel: {
       portfolioIntro: "Track the main project and each delivery module from one desktop shell.",
@@ -402,6 +411,12 @@ const dictionaries = {
       list: "列表",
       grid: "网格",
       progress: "进度",
+      model: "模型",
+      modelRoute: "模型路由",
+      connected: "Ollama 已连接",
+      disconnected: "Ollama 不可用",
+      noModels: "未发现可用模型",
+      syncFailed: "模型切换失败",
     },
     projectsPanel: {
       portfolioIntro: "在同一个桌面壳层里追踪主项目和各个交付模块。",
@@ -633,6 +648,19 @@ const state = {
       textKey: "demo.timelineWriting",
     },
   ],
+  connection: {
+    apiBaseUrl: API_BASE_URL,
+    backendAvailable: false,
+    activeTaskId: null,
+    ollamaConnected: false,
+    models: [],
+    configuredModels: {
+      leader: "",
+      planner: "",
+      writer: "",
+      reviewer: "",
+    },
+  },
   projects: {
     records: [
       {
@@ -787,6 +815,7 @@ const state = {
 };
 
 let simulationTimer = null;
+let taskPollTimer = null;
 
 const desktopLayoutEl = document.getElementById("desktop-layout");
 const workspaceSidebarContentEl = document.getElementById("workspace-sidebar-content");
@@ -876,6 +905,29 @@ function formatCurrency(value) {
     currency: "USD",
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function formatTimestamp(value) {
+  if (!value) return formatTime();
+  return formatTime(new Date(value));
+}
+
+function taskProgressByStatus(status) {
+  const map = {
+    pending: 8,
+    planning: 32,
+    writing: 68,
+    reviewing: 86,
+    completed: 100,
+    failed: 100,
+  };
+  return map[status] ?? 0;
+}
+
+function normalizeTaskPhase(status) {
+  if (status === "failed") return "reviewing";
+  if (phases.includes(status)) return status;
+  return "pending";
 }
 
 function getCurrentTaskTitle() {
@@ -1124,11 +1176,8 @@ function updateShellChrome() {
     button.setAttribute("aria-label", t(`aria.workspace.${workspace}`));
   });
 
-  if (window.desktopBridge?.runtime) {
-    runtimeBadgeEl.textContent = window.desktopBridge.runtime;
-  } else {
-    runtimeBadgeEl.textContent = t("rail.browserPreview");
-  }
+  const baseRuntime = window.desktopBridge?.runtime || t("rail.browserPreview");
+  runtimeBadgeEl.textContent = state.connection.backendAvailable ? `${baseRuntime} + API` : baseRuntime;
 }
 
 function setActiveWorkspace(workspace) {
@@ -1140,11 +1189,13 @@ function setActiveWorkspace(workspace) {
   }
 
   renderApp();
+  syncRuntimeModelsForActiveAgent();
 }
 
 function setActiveEntry(entryId) {
   state.activeEntry[state.activeWorkspace] = entryId;
   renderApp();
+  syncRuntimeModelsForActiveAgent();
 }
 
 function pushMessage(sender, text) {
@@ -1161,6 +1212,240 @@ function pushTimeline(type, text) {
     type,
     time: formatTime(),
     text,
+  });
+}
+
+async function apiFetch(path, options = {}) {
+  const response = await fetch(`${state.connection.apiBaseUrl}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API request failed (${response.status}): ${errorText}`);
+  }
+
+  return response.json();
+}
+
+function getAgentModelValue(agentId) {
+  return state.connection.configuredModels[agentId] || "";
+}
+
+function supportsRuntimeModel(agentId) {
+  return ROUTABLE_AGENT_IDS.has(agentId);
+}
+
+function getAgentModelOptions(agentId) {
+  const options = [...state.connection.models];
+  const currentModel = getAgentModelValue(agentId);
+
+  if (currentModel && !options.some((option) => option.name === currentModel)) {
+    options.unshift({
+      name: currentModel,
+      size: null,
+      modifiedAt: null,
+    });
+  }
+
+  return options;
+}
+
+function renderAgentModelControls(agentId) {
+  if (!supportsRuntimeModel(agentId)) return "";
+
+  const options = getAgentModelOptions(agentId);
+  const currentModel = getAgentModelValue(agentId);
+  const connected = state.connection.backendAvailable && state.connection.ollamaConnected;
+  const statusClass = connected ? "connection-chip is-connected" : "connection-chip";
+
+  return `
+    <div class="stage-header-meta stage-header-actions model-actions">
+      <span class="${statusClass}">${escapeHtml(connected ? t("stage.connected") : t("stage.disconnected"))}</span>
+      <label class="model-select-group">
+        <span>${escapeHtml(t("stage.model"))}</span>
+        <select
+          class="model-select"
+          data-model-role="${escapeHtml(agentId)}"
+          ${options.length === 0 ? "disabled" : ""}
+        >
+          ${
+            options.length === 0
+              ? `<option value="">${escapeHtml(t("stage.noModels"))}</option>`
+              : options
+                  .map(
+                    (option) => `
+                      <option value="${escapeHtml(option.name)}" ${option.name === currentModel ? "selected" : ""}>
+                        ${escapeHtml(option.name)}
+                      </option>
+                    `
+                  )
+                  .join("")
+          }
+        </select>
+      </label>
+    </div>
+  `;
+}
+
+function stopTaskPolling() {
+  if (taskPollTimer) {
+    clearInterval(taskPollTimer);
+    taskPollTimer = null;
+  }
+}
+
+function applyBackendSnapshot(snapshot) {
+  const task = snapshot.task;
+  state.currentTask = {
+    id: task.id,
+    title: task.title,
+    description: task.userInput,
+    phase: normalizeTaskPhase(task.status),
+    owner: task.stageOwnerId || "leader",
+    progress: taskProgressByStatus(task.status),
+    lastUpdate: formatTimestamp(task.updatedAt),
+  };
+
+  state.messages = snapshot.messages.map((message) => ({
+    id: message.id,
+    sender: message.senderType === "user" ? "user" : "leader",
+    time: formatTimestamp(message.createdAt),
+    text: message.content,
+  }));
+
+  state.timeline = snapshot.events.map((event) => ({
+    type: event.eventType,
+    time: formatTimestamp(event.createdAt),
+    text: event.message,
+  }));
+
+  const backendAgents = new Map(snapshot.agents.map((agent) => [agent.id, agent]));
+  state.agents = state.agents.map((agent) => {
+    const backendAgent = backendAgents.get(agent.id);
+    if (!backendAgent) return agent;
+
+    return {
+      ...agent,
+      status: backendAgent.status,
+      taskMode: "text",
+      taskKey: null,
+      currentTask: backendAgent.currentTaskTitle || (backendAgent.currentTaskId ? state.currentTask.title : agent.currentTask),
+    };
+  });
+}
+
+async function pollTaskSnapshot(taskId) {
+  const snapshot = await apiFetch(`/tasks/${taskId}/snapshot`);
+  applyBackendSnapshot(snapshot);
+  renderApp();
+
+  if (snapshot.task.status === "completed" || snapshot.task.status === "failed") {
+    stopTaskPolling();
+  }
+}
+
+async function startBackendTask(taskInput) {
+  const result = await apiFetch("/tasks", {
+    method: "POST",
+    body: JSON.stringify({
+      title: taskInput.length > 64 ? `${taskInput.slice(0, 64)}...` : taskInput,
+      userInput: taskInput,
+      priority: "medium",
+    }),
+  });
+
+  state.connection.activeTaskId = result.taskId;
+  state.currentTask = {
+    id: result.taskId,
+    title: taskInput.length > 64 ? `${taskInput.slice(0, 64)}...` : taskInput,
+    description: taskInput,
+    phase: normalizeTaskPhase(result.status),
+    owner: "leader",
+    progress: taskProgressByStatus(result.status),
+    lastUpdate: formatTime(),
+  };
+  renderApp();
+
+  await pollTaskSnapshot(result.taskId);
+  stopTaskPolling();
+  taskPollTimer = setInterval(() => {
+    void pollTaskSnapshot(result.taskId).catch(() => {
+      stopTaskPolling();
+      state.connection.backendAvailable = false;
+      renderApp();
+    });
+  }, TASK_POLL_INTERVAL_MS);
+}
+
+async function refreshBackendAvailability() {
+  try {
+    const health = await apiFetch("/health");
+    state.connection.backendAvailable = true;
+    state.connection.ollamaConnected = Boolean(health.ollama?.available);
+  } catch {
+    state.connection.backendAvailable = false;
+    state.connection.ollamaConnected = false;
+    state.connection.models = [];
+    state.connection.configuredModels = {
+      leader: "",
+      planner: "",
+      writer: "",
+      reviewer: "",
+    };
+  }
+}
+
+async function refreshBackendModels() {
+  if (!state.connection.backendAvailable) return;
+
+  try {
+    const runtime = await apiFetch("/models");
+    state.connection.ollamaConnected = Boolean(runtime.connected);
+    state.connection.models = runtime.models || [];
+    state.connection.configuredModels = {
+      ...state.connection.configuredModels,
+      ...(runtime.configured || {}),
+    };
+  } catch {
+    state.connection.models = [];
+  }
+}
+
+async function updateAgentRuntimeModel(agentId, model) {
+  const runtime = await apiFetch("/models", {
+    method: "POST",
+    body: JSON.stringify({
+      role: agentId,
+      model,
+    }),
+  });
+
+  state.connection.ollamaConnected = Boolean(runtime.connected);
+  state.connection.models = runtime.models || [];
+  state.connection.configuredModels = {
+    ...state.connection.configuredModels,
+    ...(runtime.configured || {}),
+  };
+}
+
+async function syncRuntimeModels() {
+  await refreshBackendAvailability();
+  if (state.connection.backendAvailable) {
+    await refreshBackendModels();
+  }
+}
+
+function syncRuntimeModelsForActiveAgent() {
+  const activeEntryId = getActiveEntryId();
+  if (state.activeWorkspace !== "team" || !supportsRuntimeModel(activeEntryId)) return;
+
+  void syncRuntimeModels().then(() => {
+    renderApp();
   });
 }
 
@@ -1990,7 +2275,14 @@ function renderStage() {
   const workspace = getActiveWorkspace();
   const entry = getActiveEntry();
   const showTeamLayoutSwitch = state.activeWorkspace === "team" && getActiveEntryId() === "overview";
-  const showTaskMeta = !showTeamLayoutSwitch && !["settings", "projects", "usage"].includes(state.activeWorkspace);
+  const showTeamModelControls =
+    state.activeWorkspace === "team" &&
+    getActiveEntryId() !== "overview" &&
+    supportsRuntimeModel(getActiveEntryId());
+  const showTaskMeta =
+    !showTeamLayoutSwitch &&
+    state.activeWorkspace !== "team" &&
+    !["settings", "projects", "usage"].includes(state.activeWorkspace);
 
   workspaceStageContentEl.innerHTML = `
     <div class="stage-shell">
@@ -2024,6 +2316,8 @@ function renderStage() {
                 </button>
               </div>
             `
+            : showTeamModelControls
+              ? renderAgentModelControls(getActiveEntryId())
             : showTaskMeta
               ? `
                 <div class="stage-header-meta">
@@ -2064,7 +2358,7 @@ function handleHandoffQuestion() {
   renderApp();
 }
 
-function runTaskLifecycle(userInput) {
+function runLocalTaskLifecycle(userInput) {
   if (simulationTimer) {
     clearTimeout(simulationTimer);
   }
@@ -2158,6 +2452,20 @@ function runTaskLifecycle(userInput) {
   advance();
 }
 
+async function runTaskLifecycle(userInput) {
+  stopTaskPolling();
+
+  try {
+    await refreshBackendAvailability();
+    if (state.connection.backendAvailable) {
+      await startBackendTask(userInput);
+      return;
+    }
+  } catch {}
+
+  runLocalTaskLifecycle(userInput);
+}
+
 function bindStageActions() {
   const chatForm = document.getElementById("chat-form");
   const chatInput = document.getElementById("chat-input");
@@ -2167,6 +2475,7 @@ function bindStageActions() {
   const themeButtons = [...document.querySelectorAll("[data-theme-option]")];
   const languageButtons = [...document.querySelectorAll("[data-language-option]")];
   const teamLayoutButtons = [...document.querySelectorAll("[data-team-layout]")];
+  const modelSelects = [...document.querySelectorAll("[data-model-role]")];
 
   treeItems.forEach((button) => {
     button.addEventListener("click", () => {
@@ -2181,7 +2490,7 @@ function bindStageActions() {
       if (!value) return;
 
       pushMessage("user", value);
-      runTaskLifecycle(value);
+      void runTaskLifecycle(value);
       chatInput.value = "";
     });
   }
@@ -2238,6 +2547,26 @@ function bindStageActions() {
       renderApp();
     });
   });
+
+  modelSelects.forEach((select) => {
+    select.addEventListener("change", async () => {
+      const role = select.dataset.modelRole;
+      const model = select.value;
+
+      if (!role || !model) return;
+
+      select.disabled = true;
+
+      try {
+        await updateAgentRuntimeModel(role, model);
+      } catch (error) {
+        console.error(error);
+        window.alert(t("stage.syncFailed"));
+      } finally {
+        renderApp();
+      }
+    });
+  });
 }
 
 function renderApp() {
@@ -2263,3 +2592,6 @@ loadLanguage();
 loadTheme();
 setAgentStatusesByPhase(state.currentTask.phase);
 renderApp();
+void syncRuntimeModels().then(() => {
+  renderApp();
+});
