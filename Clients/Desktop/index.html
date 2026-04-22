@@ -17,18 +17,83 @@
 
             <nav class="rail-nav" aria-label="Workspace switcher">
               <button class="rail-item is-active" type="button" data-workspace="chat" aria-label="Chat workspace">
-                <span>💬</span>
+                <span class="rail-item-content">
+                  <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M5 6.5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H11l-4.5 3v-3H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  <span class="rail-label">Chat</span>
+                </span>
               </button>
+
               <button class="rail-item" type="button" data-workspace="team" aria-label="Team workspace">
-                <span>👥</span>
+                <span class="rail-item-content">
+                  <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="9" cy="9" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7" />
+                    <circle cx="16" cy="10" r="2" fill="none" stroke="currentColor" stroke-width="1.7" />
+                    <path
+                      d="M4.5 18c.8-2.4 2.7-3.6 4.5-3.6S12.7 15.6 13.5 18"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                    />
+                    <path
+                      d="M13.8 17.5c.5-1.7 1.8-2.6 3.2-2.6 1.2 0 2.3.6 3 1.9"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                  <span class="rail-label">Team</span>
+                </span>
               </button>
+
               <button class="rail-item" type="button" data-workspace="task" aria-label="Task workspace">
-                <span>🗂</span>
+                <span class="rail-item-content">
+                  <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.7" />
+                    <path
+                      d="M8 9.5h8M8 13h8M8 16.5h5"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                  <span class="rail-label">Task</span>
+                </span>
               </button>
             </nav>
           </div>
 
           <div class="rail-bottom">
+            <button class="rail-item rail-item-secondary" type="button" data-workspace="settings" aria-label="Settings workspace">
+              <span class="rail-item-content">
+                <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M12 8.8a3.2 3.2 0 1 1 0 6.4 3.2 3.2 0 0 1 0-6.4Z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                  />
+                  <path
+                    d="M19.4 13.2v-2.4l-2-.5a5.8 5.8 0 0 0-.5-1.2l1.1-1.8-1.7-1.7-1.8 1.1a5.8 5.8 0 0 0-1.2-.5l-.5-2h-2.4l-.5 2a5.8 5.8 0 0 0-1.2.5L7 5.6 5.3 7.3l1.1 1.8a5.8 5.8 0 0 0-.5 1.2l-2 .5v2.4l2 .5c.1.4.3.8.5 1.2l-1.1 1.8L7 18.4l1.8-1.1c.4.2.8.4 1.2.5l.5 2h2.4l.5-2c.4-.1.8-.3 1.2-.5l1.8 1.1 1.7-1.7-1.1-1.8c.2-.4.4-.8.5-1.2l2-.5Z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                <span class="rail-label">Settings</span>
+              </span>
+            </button>
             <div class="rail-runtime">
               <span class="eyebrow">Runtime</span>
               <strong id="runtime-badge">Browser Preview</strong>

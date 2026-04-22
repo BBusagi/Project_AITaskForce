@@ -2,32 +2,59 @@ const phases = ["pending", "planning", "writing", "reviewing", "completed"];
 
 const workspaceMeta = {
   chat: {
-    title: "Chat Workspace",
-    description: "Leader 接收任务，中栏列出对话与操作入口，右侧显示完整对话或输入面板。",
-    items: [
-      { id: "thread", label: "Leader Thread", description: "当前任务主对话流" },
-      { id: "compose", label: "Compose", description: "向 Leader 发布新任务" },
-      { id: "checkins", label: "Check-ins", description: "快速询问进度与责任人" },
+    title: "Chat",
+    groups: [
+      {
+        label: "Threads",
+        items: [
+          { id: "thread", label: "Leader Thread", meta: "Live" },
+          { id: "checkins", label: "Check-ins", meta: "2" },
+        ],
+      },
+      {
+        label: "Actions",
+        items: [{ id: "compose", label: "Compose", meta: "+" }],
+      },
     ],
   },
   team: {
-    title: "Team Workspace",
-    description: "中栏切换团队总览或具体角色，右侧展示选中成员的完整信息。",
-    items: [
-      { id: "overview", label: "Team Overview", description: "查看整支 AI 团队状态" },
-      { id: "leader", label: "Leader", description: "编排与最终答复" },
-      { id: "planner", label: "Planner", description: "任务拆解与约束定义" },
-      { id: "writer", label: "Writer", description: "草稿生成与改写" },
-      { id: "reviewer", label: "Reviewer", description: "质量审查与反馈" },
+    title: "Team",
+    groups: [
+      {
+        label: "Views",
+        items: [{ id: "overview", label: "Overview", meta: "4" }],
+      },
+      {
+        label: "Agents",
+        items: [
+          { id: "leader", label: "Leader", meta: "On" },
+          { id: "planner", label: "Planner", meta: "On" },
+          { id: "writer", label: "Writer", meta: "Wait" },
+          { id: "reviewer", label: "Reviewer", meta: "Idle" },
+        ],
+      },
     ],
   },
   task: {
-    title: "Task Workspace",
-    description: "中栏切任务信息切片，右侧显示完整任务视图，而不是页面内部的小面板。",
-    items: [
-      { id: "overview", label: "Current Task", description: "当前任务概览与负责人" },
-      { id: "stages", label: "Stage Flow", description: "查看阶段流转与进度" },
-      { id: "timeline", label: "Timeline", description: "查看事件时间线" },
+    title: "Task",
+    groups: [
+      {
+        label: "Current",
+        items: [
+          { id: "overview", label: "Overview", meta: "Now" },
+          { id: "stages", label: "Stage Flow", meta: "5" },
+          { id: "timeline", label: "Timeline", meta: "Log" },
+        ],
+      },
+    ],
+  },
+  settings: {
+    title: "Settings",
+    groups: [
+      {
+        label: "Appearance",
+        items: [{ id: "theme", label: "Theme", meta: "3" }],
+      },
     ],
   },
 };
@@ -38,13 +65,15 @@ const state = {
     chat: "thread",
     team: "overview",
     task: "overview",
+    settings: "theme",
   },
   sidebarCollapsed: false,
+  theme: "default",
   currentTask: {
     id: "task-001",
     title: "重构 Desktop 为 VS Code / Slack 式三层侧栏",
     description:
-      "将 Desktop 改成最左侧 icon rail 切换 workspace，中间栏展示当前 workspace 的目录入口，右侧显示选中工作区的完整内容，并允许再次点击当前 icon 收起中间栏。",
+      "将 Desktop 改成最左侧 icon rail 切换 workspace，中间栏改为资源树式目录，右侧显示选中条目的完整内容，并允许再次点击当前 icon 收起中栏。",
     phase: "planning",
     owner: "Planner",
     progress: 36,
@@ -63,7 +92,7 @@ const state = {
       id: "planner",
       name: "Planner",
       duty: "把用户要求转换成结构化执行步骤",
-      currentTask: "定义三层侧栏导航关系与折叠行为",
+      currentTask: "收紧 shell 和资源树结构",
       status: "working",
       skills: ["task-breakdown", "constraints", "output-schema"],
     },
@@ -90,7 +119,7 @@ const state = {
       role: "leader",
       name: "Leader",
       time: "09:42",
-      content: "欢迎进入 AI Task Force。这里不再是单页内部切换，而是完整工作区切换。",
+      content: "欢迎进入 AI Task Force。左侧 rail 切 workspace，中栏像频道栏，右侧显示完整内容。",
     },
     {
       id: "msg-002",
@@ -104,7 +133,7 @@ const state = {
       role: "leader",
       name: "Leader",
       time: "09:46",
-      content: "已收到。当前版本会改成 icon rail -> 中栏目录 -> 右侧完整内容 的三层结构。",
+      content: "已收到。当前版本会继续收紧 icon、标签和中栏层级，去掉多余说明文字。",
     },
   ],
   timeline: [
@@ -121,6 +150,7 @@ const workspaceSidebarContentEl = document.getElementById("workspace-sidebar-con
 const workspaceStageContentEl = document.getElementById("workspace-stage-content");
 const railButtons = [...document.querySelectorAll(".rail-item")];
 const runtimeBadgeEl = document.getElementById("runtime-badge");
+const THEME_STORAGE_KEY = "atf-desktop-theme";
 
 function escapeHtml(text) {
   return String(text)
@@ -141,6 +171,34 @@ function formatPhase(phase) {
   return map[phase] || phase;
 }
 
+function applyTheme(theme) {
+  state.theme = theme;
+  document.documentElement.setAttribute("data-theme", theme);
+}
+
+function loadTheme() {
+  try {
+    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (storedTheme === "default" || storedTheme === "dark" || storedTheme === "light") {
+      applyTheme(storedTheme);
+      return;
+    }
+  } catch {}
+
+  applyTheme("default");
+}
+
+function saveTheme(theme) {
+  applyTheme(theme);
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {}
+}
+
+function flattenItems(workspaceKey) {
+  return workspaceMeta[workspaceKey].groups.flatMap((group) => group.items);
+}
+
 function getActiveWorkspace() {
   return workspaceMeta[state.activeWorkspace];
 }
@@ -150,7 +208,7 @@ function getActiveEntryId() {
 }
 
 function getActiveEntry() {
-  return getActiveWorkspace().items.find((item) => item.id === getActiveEntryId());
+  return flattenItems(state.activeWorkspace).find((item) => item.id === getActiveEntryId());
 }
 
 function getAgentById(id) {
@@ -166,17 +224,17 @@ function badgeClass(status) {
 function buildTaskSummary() {
   const summaryMap = {
     pending: "Leader 已接收任务，准备将需求送入固定工作流。",
-    planning: "Planner 正在定义左 rail、中间栏和主舞台之间的关系。",
-    writing: "Writer 正在补齐页面文案与选中内容区展示。",
-    reviewing: "Reviewer 正在检查是否真正实现了三层导航，而非页面内部切换。",
-    completed: "当前任务已完成，可以继续观察不同工作区与目录入口。",
+    planning: "Planner 正在收紧左 rail、中栏资源树和主舞台之间的关系。",
+    writing: "Writer 正在补齐条目内容和主工作区展示。",
+    reviewing: "Reviewer 正在检查三层导航是否足够像桌面客户端。",
+    completed: "当前任务已完成，可以继续在不同 workspace 之间切换。",
   };
 
   return summaryMap[state.currentTask.phase];
 }
 
 function buildLeaderNote() {
-  return `当前任务处于 ${formatPhase(state.currentTask.phase)} 阶段，负责人是 ${state.currentTask.owner}。再次点击当前左侧图标会收起或展开中间栏。`;
+  return `当前任务处于 ${formatPhase(state.currentTask.phase)} 阶段，负责人是 ${state.currentTask.owner}。再次点击当前左侧图标会收起或展开中栏。`;
 }
 
 function setActiveWorkspace(workspace) {
@@ -270,55 +328,40 @@ function renderSidebar() {
   workspaceSidebarContentEl.innerHTML = `
     <div class="sidebar-shell">
       <div class="sidebar-top">
-        <div class="brand-block">
-          <div class="brand-mark">ATF</div>
-          <div>
-            <p class="eyebrow">Electron Workspace</p>
-            <h1>AI Task Force</h1>
+        <header class="sidebar-header">
+          <div class="sidebar-title">
+            <p class="eyebrow">Workspace</p>
+            <h2>${escapeHtml(workspace.title)}</h2>
           </div>
-        </div>
+          <span class="sidebar-toggle-hint">${state.sidebarCollapsed ? "Closed" : "Open"}</span>
+        </header>
 
-        <div class="sidebar-workspace-card">
-          <div class="sidebar-toolbar">
-            <div>
-              <p class="eyebrow">Workspace</p>
-              <h2>${escapeHtml(workspace.title)}</h2>
-            </div>
-            <span class="status-pill">${state.sidebarCollapsed ? "Closed" : "Open"}</span>
-          </div>
-          <p class="workspace-description">${escapeHtml(workspace.description)}</p>
-        </div>
-
-        <section class="sidebar-section">
-          <p class="eyebrow">Entries</p>
-          <div class="sidebar-nav">
-            ${workspace.items
-              .map(
-                (item) => `
-                  <button
-                    class="sidebar-entry ${item.id === activeEntryId ? "is-active" : ""}"
-                    type="button"
-                    data-entry="${escapeHtml(item.id)}"
-                  >
-                    <strong>${escapeHtml(item.label)}</strong>
-                    <small>${escapeHtml(item.description)}</small>
-                  </button>
-                `
-              )
-              .join("")}
-          </div>
-        </section>
+        ${workspace.groups
+          .map(
+            (group) => `
+              <section class="tree-section">
+                <span class="tree-label">${escapeHtml(group.label)}</span>
+                <div class="tree-list">
+                  ${group.items
+                    .map(
+                      (item) => `
+                        <button
+                          class="tree-item ${item.id === activeEntryId ? "is-active" : ""}"
+                          type="button"
+                          data-entry="${escapeHtml(item.id)}"
+                        >
+                          <span class="tree-item-name">${escapeHtml(item.label)}</span>
+                          <span class="tree-item-meta">${escapeHtml(item.meta)}</span>
+                        </button>
+                      `
+                    )
+                    .join("")}
+                </div>
+              </section>
+            `
+          )
+          .join("")}
       </div>
-
-      <section class="sidebar-summary">
-        <p class="eyebrow">Current Task</p>
-        <h3>${escapeHtml(state.currentTask.title)}</h3>
-        <div class="summary-meta">
-          <span class="tag accent">${escapeHtml(formatPhase(state.currentTask.phase))}</span>
-          <span class="tag">${escapeHtml(state.currentTask.owner)}</span>
-        </div>
-        <p class="summary-note">${escapeHtml(buildTaskSummary())}</p>
-      </section>
     </div>
   `;
 }
@@ -382,14 +425,13 @@ function renderComposeContent() {
       <div class="info-block">
         <p class="eyebrow">Compose</p>
         <h3>发送给 Leader</h3>
-        <p class="stage-caption">这里是完整输入区。左侧 icon 只决定打开哪个 workspace，中栏决定看哪个条目，真正的内容在这里编辑。</p>
         <form id="chat-form" class="chat-form">
           <label for="chat-input">任务内容</label>
           <textarea
             id="chat-input"
             name="chat"
             rows="5"
-            placeholder="例如：请把 Desktop 改成最外层 icon rail + 可折叠中栏 + 右侧完整工作区内容。"
+            placeholder="例如：请把 Desktop 改成最外层 icon rail + 资源树中栏 + 右侧完整工作区内容。"
             required
           ></textarea>
           <div class="chat-actions">
@@ -413,19 +455,19 @@ function renderCheckinsContent() {
           <span class="tag">${escapeHtml(state.currentTask.id)}</span>
           <span class="tag">Progress ${escapeHtml(String(state.currentTask.progress))}%</span>
         </div>
-        <p class="stage-caption">${escapeHtml(buildTaskSummary())}</p>
+        <p>${escapeHtml(buildTaskSummary())}</p>
       </div>
 
       <div class="card-grid">
         <div class="info-block">
-          <p class="eyebrow">Ask</p>
-          <h4>当前由谁负责</h4>
-          <p>${escapeHtml(`当前负责人是 ${state.currentTask.owner}。`)}</p>
+          <p class="eyebrow">Owner</p>
+          <h4>当前负责人</h4>
+          <p>${escapeHtml(state.currentTask.owner)}</p>
         </div>
         <div class="info-block">
-          <p class="eyebrow">Ask</p>
-          <h4>团队在做什么</h4>
-          <p>${escapeHtml(state.agents.map((agent) => `${agent.name}：${agent.currentTask}`).join("；"))}</p>
+          <p class="eyebrow">Team</p>
+          <h4>团队状态</h4>
+          <p>${escapeHtml(state.agents.map((agent) => `${agent.name}: ${agent.currentTask}`).join("；"))}</p>
         </div>
       </div>
     </div>
@@ -443,8 +485,8 @@ function renderTeamOverviewContent() {
                 <strong>${escapeHtml(agent.name)}</strong>
                 <span class="${badgeClass(agent.status)}">${escapeHtml(agent.status)}</span>
               </div>
-              <p><strong>职责：</strong>${escapeHtml(agent.duty)}</p>
-              <p><strong>当前任务：</strong>${escapeHtml(agent.currentTask)}</p>
+              <p>${escapeHtml(agent.duty)}</p>
+              <p>${escapeHtml(agent.currentTask)}</p>
               <div class="skill-list">
                 ${agent.skills.map((skill) => `<span class="skill">${escapeHtml(skill)}</span>`).join("")}
               </div>
@@ -469,21 +511,14 @@ function renderAgentDetailContent(agentId) {
           <span class="${badgeClass(agent.status)}">${escapeHtml(agent.status)}</span>
         </div>
         <p>${escapeHtml(agent.duty)}</p>
-        <div class="stage-meta">
-          <span class="tag accent">${escapeHtml(agent.currentTask)}</span>
-        </div>
       </div>
 
       <div class="info-block">
-        <p class="eyebrow">Skills</p>
+        <p class="eyebrow">Current Task</p>
+        <p>${escapeHtml(agent.currentTask)}</p>
         <div class="skill-list">
           ${agent.skills.map((skill) => `<span class="skill">${escapeHtml(skill)}</span>`).join("")}
         </div>
-      </div>
-
-      <div class="info-block">
-        <p class="eyebrow">Context</p>
-        <p>${escapeHtml(`当前 ${agent.name} 正在参与 "${state.currentTask.title}"。`)}</p>
       </div>
     </div>
   `;
@@ -501,11 +536,6 @@ function renderTaskOverviewContent() {
           <span class="tag">${escapeHtml(state.currentTask.owner)}</span>
           <span class="tag">${escapeHtml(state.currentTask.lastUpdate)}</span>
         </div>
-      </div>
-
-      <div class="info-block">
-        <p class="eyebrow">Summary</p>
-        <p>${escapeHtml(buildTaskSummary())}</p>
       </div>
     </div>
   `;
@@ -534,7 +564,7 @@ function renderStageFlowContent() {
         <div class="progress-line">
           <div class="progress-value" style="width: ${state.currentTask.progress}%"></div>
         </div>
-        <p class="stage-caption">${escapeHtml(buildLeaderNote())}</p>
+        <p class="leader-note">${escapeHtml(buildLeaderNote())}</p>
       </div>
     </div>
   `;
@@ -543,19 +573,58 @@ function renderStageFlowContent() {
 function renderTimelineContent() {
   return `
     <div class="timeline-list">
-      ${state.timeline
-        .map(
-          (event) => `
-            <article class="timeline-item">
-              <div class="timeline-head">
-                <span>${escapeHtml(event.type)}</span>
-                <span>${escapeHtml(event.time)}</span>
-              </div>
-              <p>${escapeHtml(event.text)}</p>
-            </article>
-          `
-        )
-        .join("")}
+      <div class="timeline-list-inner">
+        ${state.timeline
+          .map(
+            (event) => `
+              <article class="timeline-item">
+                <div class="timeline-head">
+                  <span>${escapeHtml(event.type)}</span>
+                  <span>${escapeHtml(event.time)}</span>
+                </div>
+                <p>${escapeHtml(event.text)}</p>
+              </article>
+            `
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderThemeSettingsContent() {
+  const options = [
+    { id: "default", label: "Default", note: "Follow system appearance" },
+    { id: "dark", label: "Dark", note: "Use dark shell all the time" },
+    { id: "light", label: "Light", note: "Use light shell all the time" },
+  ];
+
+  return `
+    <div class="stage-layout">
+      <div class="info-block">
+        <p class="eyebrow">Appearance</p>
+        <h3>Theme</h3>
+        <p>Choose how the desktop shell should look.</p>
+        <div class="theme-switcher">
+          ${options
+            .map(
+              (option) => `
+                <button
+                  class="theme-option ${state.theme === option.id ? "is-active" : ""}"
+                  type="button"
+                  data-theme-option="${escapeHtml(option.id)}"
+                >
+                  <span class="theme-option-title">
+                    <strong>${escapeHtml(option.label)}</strong>
+                    <span>${state.theme === option.id ? "Active" : ""}</span>
+                  </span>
+                  <span>${escapeHtml(option.note)}</span>
+                </button>
+              `
+            )
+            .join("")}
+        </div>
+      </div>
     </div>
   `;
 }
@@ -572,6 +641,7 @@ function renderStageContentBody() {
   if (workspace === "task" && entry === "overview") return renderTaskOverviewContent();
   if (workspace === "task" && entry === "stages") return renderStageFlowContent();
   if (workspace === "task" && entry === "timeline") return renderTimelineContent();
+  if (workspace === "settings" && entry === "theme") return renderThemeSettingsContent();
 
   return "";
 }
@@ -583,19 +653,19 @@ function renderStage() {
   workspaceStageContentEl.innerHTML = `
     <div class="stage-shell">
       <header class="stage-header">
-        <div class="stage-title-group">
+        <div class="stage-header-main">
           <div class="stage-breadcrumb">
             <span>${escapeHtml(workspace.title)}</span>
             <span>/</span>
             <span>${escapeHtml(entry.label)}</span>
           </div>
-          <div>
-            <p class="eyebrow">Selected View</p>
-            <h2>${escapeHtml(entry.label)}</h2>
-          </div>
+          <h2 class="stage-title">${escapeHtml(entry.label)}</h2>
         </div>
-        <div class="stage-header-note">
-          点击左侧 icon 切换或收起中间栏；点击中间栏条目后，这里显示该条目的完整内容。
+
+        <div class="stage-header-meta">
+          <span class="tag accent">${escapeHtml(formatPhase(state.currentTask.phase))}</span>
+          <span class="tag">${escapeHtml(state.currentTask.owner)}</span>
+          <span class="tag">${escapeHtml(state.currentTask.id)}</span>
         </div>
       </header>
 
@@ -609,9 +679,10 @@ function bindStageActions() {
   const chatInput = document.getElementById("chat-input");
   const askStatusBtn = document.getElementById("ask-status");
   const quickButtons = [...document.querySelectorAll(".quick-btn")];
-  const sidebarEntries = [...document.querySelectorAll(".sidebar-entry")];
+  const treeItems = [...document.querySelectorAll(".tree-item")];
+  const themeButtons = [...document.querySelectorAll("[data-theme-option]")];
 
-  sidebarEntries.forEach((button) => {
+  treeItems.forEach((button) => {
     button.addEventListener("click", () => {
       setActiveEntry(button.dataset.entry);
     });
@@ -655,9 +726,16 @@ function bindStageActions() {
         const input = document.getElementById("chat-input");
         if (input) {
           input.value =
-            "请把 Desktop 改成像 VS Code / Slack 那样，左侧 icon 打开中栏，中栏选择条目，右侧展示完整内容，并支持中栏折叠。";
+            "请把左侧 rail 做成产品级图标+标签，中栏做成像 Slack / VS Code 一样的资源树，并去掉多余说明模块。";
         }
       }
+    });
+  });
+
+  themeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      saveTheme(button.dataset.themeOption);
+      renderApp();
     });
   });
 }
@@ -692,7 +770,7 @@ function runTaskLifecycle(userInput) {
   pushMessage(
     "leader",
     "Leader",
-    "任务已接入。当前 Desktop 采用三层结构：左 rail 切 workspace，中栏切条目，右侧显示完整内容。"
+    "任务已接入。当前 Desktop 使用产品级 icon rail、资源树中栏和完整主工作区。"
   );
   pushTimeline("task_created", "新任务已进入系统。");
   setAgentStatusesByPhase("pending");
@@ -725,7 +803,7 @@ function runTaskLifecycle(userInput) {
           hour: "2-digit",
           minute: "2-digit",
         });
-        pushMessage("leader", "Leader", "Planner 已完成拆解，Writer 正在生成界面内容。");
+        pushMessage("leader", "Leader", "Planner 已完成拆解，Writer 正在生成工作区内容。");
         pushTimeline("writing_started", "Writer 开始生成工作区内容。");
         setAgentStatusesByPhase("writing");
         renderApp();
@@ -741,7 +819,7 @@ function runTaskLifecycle(userInput) {
           hour: "2-digit",
           minute: "2-digit",
         });
-        pushMessage("leader", "Leader", "Reviewer 正在检查是否真正实现了三层侧栏与折叠交互。");
+        pushMessage("leader", "Leader", "Reviewer 正在检查是否真正收紧成桌面客户端式层级。");
         pushTimeline("review_started", "Reviewer 开始审查导航交互。");
         setAgentStatusesByPhase("reviewing");
         renderApp();
@@ -757,7 +835,7 @@ function runTaskLifecycle(userInput) {
           hour: "2-digit",
           minute: "2-digit",
         });
-        pushMessage("leader", "Leader", "当前任务已完成。再次点击当前左侧图标即可收起或展开中间栏。");
+        pushMessage("leader", "Leader", "当前任务已完成。再次点击当前左侧图标即可收起或展开中栏。");
         pushTimeline("final_output_ready", "Leader 完成最终交付。");
         setAgentStatusesByPhase("completed");
         renderApp();
@@ -806,5 +884,6 @@ if (window.desktopBridge?.runtime) {
   runtimeBadgeEl.textContent = window.desktopBridge.runtime;
 }
 
+loadTheme();
 setAgentStatusesByPhase(state.currentTask.phase);
 renderApp();
