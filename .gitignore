@@ -24,6 +24,13 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+Server/atf.config.local.js
+openai.key
+anthropic.key
+claude.key
+Server/openai.key
+Server/anthropic.key
+Server/claude.key
 
 # Python cache and virtual environments
 __pycache__/

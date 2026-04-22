@@ -1,0 +1,97 @@
+const { providers } = require("./config");
+
+function getConfig() {
+  return providers.openai;
+}
+
+function isConfigured() {
+  return Boolean(getConfig().apiKey);
+}
+
+async function openaiRequest(path, options = {}) {
+  const config = getConfig();
+  if (!config.apiKey) {
+    throw new Error("OpenAI API key is not configured");
+  }
+
+  const response = await fetch(`${config.baseUrl}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.apiKey}`,
+      ...(options.headers || {}),
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI request failed (${response.status}): ${errorText}`);
+  }
+
+  return response.json();
+}
+
+function isChatModel(modelId) {
+  return /^(gpt|o[1-9]|chatgpt)/i.test(modelId);
+}
+
+async function listModels() {
+  const result = await openaiRequest("/models", { method: "GET" });
+  return (result.data || [])
+    .map((model) => ({
+      id: model.id,
+      ownedBy: model.owned_by,
+      created: model.created,
+    }))
+    .filter((model) => isChatModel(model.id))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function readOutputText(result) {
+  if (typeof result.output_text === "string" && result.output_text.trim()) {
+    return result.output_text.trim();
+  }
+
+  const chunks = [];
+  for (const output of result.output || []) {
+    for (const content of output.content || []) {
+      if (content.type === "output_text" && content.text) {
+        chunks.push(content.text);
+      }
+    }
+  }
+
+  return chunks.join("\n").trim();
+}
+
+async function generate(model, prompt) {
+  const result = await openaiRequest("/responses", {
+    method: "POST",
+    body: JSON.stringify({
+      model,
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: prompt,
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  return {
+    provider: "openai",
+    model,
+    text: readOutputText(result),
+  };
+}
+
+module.exports = {
+  isConfigured,
+  listModels,
+  generate,
+};

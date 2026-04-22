@@ -1,4 +1,5 @@
 const { randomUUID } = require("node:crypto");
+const { getConfiguredRoutes } = require("./model-gateway");
 
 const agentDefinitions = [
   {
@@ -6,16 +7,16 @@ const agentDefinitions = [
     name: "Leader",
     role: "leader",
     description: "Receives tasks, orchestrates the workflow, and delivers the final response.",
-    modelProvider: "mock",
-    modelName: "workflow-controller",
+    modelProvider: "ollama",
+    modelName: "default",
   },
   {
     id: "planner",
     name: "Planner",
     role: "planner",
     description: "Breaks user requests into structured steps, constraints, and expected outputs.",
-    modelProvider: "mock",
-    modelName: "workflow-planner",
+    modelProvider: "ollama",
+    modelName: "default",
   },
   {
     id: "writer",
@@ -23,15 +24,15 @@ const agentDefinitions = [
     role: "writer",
     description: "Produces the first draft and structured task output.",
     modelProvider: "ollama",
-    modelName: "local-writer",
+    modelName: "default",
   },
   {
     id: "reviewer",
     name: "Reviewer",
     role: "reviewer",
     description: "Checks output quality, clarity, and instruction adherence.",
-    modelProvider: "mock",
-    modelName: "workflow-reviewer",
+    modelProvider: "ollama",
+    modelName: "default",
   },
 ];
 
@@ -177,17 +178,20 @@ function getTaskMessages(taskId) {
 }
 
 function buildAgentsView() {
+  const configuredRoutes = getConfiguredRoutes();
+
   return agentDefinitions.map((agent) => {
     const activeTask = [...state.tasks.values()].find((task) => task.stageOwnerId === agent.id && task.status !== "completed" && task.status !== "failed");
     const idleLikeStatus = agent.id === "writer" ? "waiting" : "idle";
+    const route = configuredRoutes[agent.id];
 
     return {
       id: agent.id,
       name: agent.name,
       role: agent.role,
       description: agent.description,
-      modelProvider: agent.modelProvider,
-      modelName: agent.modelName,
+      modelProvider: route?.provider || agent.modelProvider,
+      modelName: route?.model || agent.modelName,
       status: activeTask ? "working" : idleLikeStatus,
       currentTaskId: activeTask?.id ?? null,
       currentTaskTitle: activeTask?.title ?? null,

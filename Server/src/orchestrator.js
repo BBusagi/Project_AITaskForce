@@ -7,7 +7,7 @@ const {
   getTask,
   state,
 } = require("./store");
-const { checkOllama, generate } = require("./ollama");
+const { generate, resolveRoute } = require("./model-gateway");
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -19,15 +19,6 @@ function summarizeTitle(text) {
 }
 
 async function generateOrFallback(role, prompt, fallback) {
-  const available = await checkOllama();
-  if (!available) {
-    return {
-      provider: "mock",
-      model: "unavailable",
-      text: fallback,
-    };
-  }
-
   try {
     return await generate(role, prompt);
   } catch {
@@ -37,6 +28,12 @@ async function generateOrFallback(role, prompt, fallback) {
       text: fallback,
     };
   }
+}
+
+function describeRoute(role) {
+  const route = resolveRoute(role);
+  if (!route) return "fallback";
+  return `${route.provider}:${route.model}`;
 }
 
 function buildPlannerPrompt(task) {
@@ -92,6 +89,26 @@ function buildFinalOutput(task, planText, draftText, reviewText) {
   ].join("\n");
 }
 
+function buildLeaderPrompt(task, planText, draftText, reviewText) {
+  return [
+    "You are the Leader agent in AI Task Force.",
+    "Deliver the final user-facing response for the completed workflow.",
+    "Keep it concise, structured, and ready to send back to the user.",
+    "",
+    `Task title: ${task.title}`,
+    `User input: ${task.userInput}`,
+    "",
+    "Planner output:",
+    planText,
+    "",
+    "Writer draft:",
+    draftText,
+    "",
+    "Reviewer result:",
+    reviewText,
+  ].join("\n");
+}
+
 function addLifecycleMessage(taskId, senderId, content) {
   addMessage(taskId, {
     senderType: senderId === "user" ? "user" : "leader",
@@ -115,7 +132,7 @@ async function runTask(taskId) {
       eventType: "planning_started",
       message: "Planner started decomposing the task.",
     });
-    addLifecycleMessage(taskId, "leader", "Planner has started. Building a structured task plan.");
+    addLifecycleMessage(taskId, "leader", `Planner has started on route ${describeRoute("planner")}. Building a structured task plan.`);
 
     const planResult = await generateOrFallback(
       "planner",
@@ -156,7 +173,7 @@ async function runTask(taskId) {
       eventType: "writing_started",
       message: "Writer started the first draft.",
     });
-    addLifecycleMessage(taskId, "leader", "Writer is generating the first draft through the local model route.");
+    addLifecycleMessage(taskId, "leader", `Writer is generating the first draft through route ${describeRoute("writer")}.`);
 
     const draftResult = await generateOrFallback(
       "writer",
@@ -197,7 +214,7 @@ async function runTask(taskId) {
       eventType: "review_started",
       message: "Reviewer started the quality check.",
     });
-    addLifecycleMessage(taskId, "leader", "Reviewer is checking the draft before final synthesis.");
+    addLifecycleMessage(taskId, "leader", `Reviewer is checking the draft through route ${describeRoute("reviewer")}.`);
 
     const reviewResult = await generateOrFallback(
       "reviewer",
@@ -232,8 +249,6 @@ async function runTask(taskId) {
       },
     });
 
-    const finalOutput = buildFinalOutput(task, planResult.text, draftResult.text, reviewResult.text);
-
     if (!passed) {
       updateTask(taskId, {
         status: "failed",
@@ -250,10 +265,18 @@ async function runTask(taskId) {
       return;
     }
 
+    addLifecycleMessage(taskId, "leader", `Leader is synthesizing the final response through route ${describeRoute("leader")}.`);
+
+    const finalResult = await generateOrFallback(
+      "leader",
+      buildLeaderPrompt(task, planResult.text, draftResult.text, reviewResult.text),
+      buildFinalOutput(task, planResult.text, draftResult.text, reviewResult.text)
+    );
+
     updateTask(taskId, {
       status: "completed",
       stageOwnerId: "leader",
-      finalOutput,
+      finalOutput: finalResult.text,
       errorMessage: null,
     });
     addEvent(taskId, {
@@ -261,6 +284,10 @@ async function runTask(taskId) {
       actorId: "leader",
       eventType: "final_output_ready",
       message: "Leader synthesized the final output.",
+      metadata: {
+        provider: finalResult.provider,
+        model: finalResult.model,
+      },
     });
     addLifecycleMessage(taskId, "leader", "Final output is ready.");
   } catch (error) {

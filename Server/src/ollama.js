@@ -1,13 +1,6 @@
-const { ollamaBaseUrl, writerModel, plannerModel, reviewerModel, leaderModel } = require("./config");
+const { providers } = require("./config");
 
-const defaultModels = {
-  writer: writerModel,
-  planner: plannerModel || writerModel,
-  reviewer: reviewerModel || writerModel,
-  leader: leaderModel || writerModel,
-};
-
-const currentModels = { ...defaultModels };
+const ollamaBaseUrl = providers.ollama.baseUrl;
 
 async function postJson(path, body) {
   const response = await fetch(`${ollamaBaseUrl}${path}`, {
@@ -51,28 +44,10 @@ async function listModels() {
 }
 
 function resolveModel(role) {
-  return currentModels[role] || currentModels.writer;
+  return providers.ollama.models[0] || "";
 }
 
-function getConfiguredModels() {
-  return { ...currentModels };
-}
-
-function setRoleModel(role, model) {
-  if (!currentModels[role]) {
-    throw new Error(`Unsupported role model selection: ${role}`);
-  }
-
-  if (!model || typeof model !== "string") {
-    throw new Error("Model name is required");
-  }
-
-  currentModels[role] = model;
-  return getConfiguredModels();
-}
-
-async function generate(role, prompt) {
-  const model = resolveModel(role);
+async function generate(model, prompt) {
   const payload = {
     model,
     prompt,
@@ -95,6 +70,4 @@ module.exports = {
   listModels,
   generate,
   resolveModel,
-  getConfiguredModels,
-  setRoleModel,
 };

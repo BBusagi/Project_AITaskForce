@@ -6,6 +6,44 @@ const LANGUAGE_STORAGE_KEY = "atf-desktop-language";
 const API_BASE_URL = "http://127.0.0.1:8787/api";
 const TASK_POLL_INTERVAL_MS = 1500;
 
+const PROVIDER_LABELS = {
+  ollama: "Ollama Local",
+  openai: "GPT API",
+  anthropic: "Claude API",
+};
+
+function createDefaultProviders() {
+  return {
+    ollama: {
+      id: "ollama",
+      label: PROVIDER_LABELS.ollama,
+      configured: true,
+      available: false,
+    },
+    openai: {
+      id: "openai",
+      label: PROVIDER_LABELS.openai,
+      configured: false,
+      available: false,
+    },
+    anthropic: {
+      id: "anthropic",
+      label: PROVIDER_LABELS.anthropic,
+      configured: false,
+      available: false,
+    },
+  };
+}
+
+function createDefaultRoutes() {
+  return {
+    leader: null,
+    planner: null,
+    writer: null,
+    reviewer: null,
+  };
+}
+
 const dictionaries = {
   en: {
     app: {
@@ -47,6 +85,7 @@ const dictionaries = {
       breakdown: "Breakdown",
       appearance: "Appearance",
       localization: "Localization",
+      modelRouting: "Model Routing",
     },
     entries: {
       thread: "Leader Thread",
@@ -59,6 +98,7 @@ const dictionaries = {
       teamUsage: "By Team",
       projectUsage: "By Project",
       budget: "Budget",
+      llm: "LLM",
       theme: "Theme",
       language: "Language",
       leader: "Leader",
@@ -81,6 +121,7 @@ const dictionaries = {
       idle: "Idle",
       stub: "Stub",
       done: "Done",
+      off: "Off",
       themeCount: "3",
       languageCount: "2",
     },
@@ -139,6 +180,14 @@ const dictionaries = {
       progress: "Progress",
       model: "Model",
       modelRoute: "Model Route",
+      llmFilters: "LLM Filters",
+      llmFiltersNote: "Enable the model candidates that are allowed to appear in agent routing menus.",
+      localModels: "Local LLM",
+      localModelsNote: "List every detected local model and choose which ones can be assigned to agents.",
+      apiModels: "API LLM",
+      apiModelsNote: "List every remote API model and choose which ones can be assigned to agents.",
+      enabled: "Enabled",
+      disabled: "Disabled",
       connected: "Ollama Connected",
       disconnected: "Ollama Unavailable",
       noModels: "No models found",
@@ -558,7 +607,7 @@ const state = {
     task: "overview",
     projects: "portfolio",
     usage: "teamUsage",
-    settings: "theme",
+    settings: "llm",
   },
   teamOverviewLayout: "list",
   sidebarCollapsed: false,
@@ -652,14 +701,11 @@ const state = {
     apiBaseUrl: API_BASE_URL,
     backendAvailable: false,
     activeTaskId: null,
-    ollamaConnected: false,
+    providers: createDefaultProviders(),
     models: [],
-    configuredModels: {
-      leader: "",
-      planner: "",
-      writer: "",
-      reviewer: "",
-    },
+    allModels: [],
+    enabledRouteIds: [],
+    configuredRoutes: createDefaultRoutes(),
   },
   projects: {
     records: [
@@ -1119,6 +1165,10 @@ function buildWorkspaceMeta() {
       title: t("rail.settings"),
       groups: [
         {
+          label: t("groups.modelRouting"),
+          items: [{ id: "llm", label: t("entries.llm"), meta: formatCompactNumber(state.connection.enabledRouteIds.length) }],
+        },
+        {
           label: t("groups.appearance"),
           items: [{ id: "theme", label: t("entries.theme"), meta: t("meta.themeCount") }],
         },
@@ -1232,8 +1282,12 @@ async function apiFetch(path, options = {}) {
   return response.json();
 }
 
+function getAgentConfiguredRoute(agentId) {
+  return state.connection.configuredRoutes[agentId] || null;
+}
+
 function getAgentModelValue(agentId) {
-  return state.connection.configuredModels[agentId] || "";
+  return getAgentConfiguredRoute(agentId)?.id || "";
 }
 
 function supportsRuntimeModel(agentId) {
@@ -1241,18 +1295,51 @@ function supportsRuntimeModel(agentId) {
 }
 
 function getAgentModelOptions(agentId) {
-  const options = [...state.connection.models];
-  const currentModel = getAgentModelValue(agentId);
+  return [...state.connection.models];
+}
 
-  if (currentModel && !options.some((option) => option.name === currentModel)) {
-    options.unshift({
-      name: currentModel,
-      size: null,
-      modifiedAt: null,
-    });
+function isRouteEnabled(routeId) {
+  return state.connection.enabledRouteIds.includes(routeId);
+}
+
+function isLocalRoute(route) {
+  return route.provider === "ollama";
+}
+
+function getLLMFilterModels(kind) {
+  return state.connection.allModels.filter((model) => (kind === "local" ? isLocalRoute(model) : !isLocalRoute(model)));
+}
+
+function getProviderStatusMeta(agentId) {
+  const route = getAgentConfiguredRoute(agentId);
+  if (!route) {
+    return {
+      className: "connection-chip",
+      label: "Model Route Missing",
+    };
   }
 
-  return options;
+  const providerState = state.connection.providers[route.provider];
+  const providerLabel = providerState?.label || route.provider;
+
+  if (!providerState?.configured && route.provider !== "ollama") {
+    return {
+      className: "connection-chip",
+      label: `${providerLabel} Key Missing`,
+    };
+  }
+
+  if (!providerState?.available) {
+    return {
+      className: "connection-chip",
+      label: `${providerLabel} Unavailable`,
+    };
+  }
+
+  return {
+    className: "connection-chip is-connected",
+    label: `${providerLabel} Ready`,
+  };
 }
 
 function renderAgentModelControls(agentId) {
@@ -1260,12 +1347,11 @@ function renderAgentModelControls(agentId) {
 
   const options = getAgentModelOptions(agentId);
   const currentModel = getAgentModelValue(agentId);
-  const connected = state.connection.backendAvailable && state.connection.ollamaConnected;
-  const statusClass = connected ? "connection-chip is-connected" : "connection-chip";
+  const statusMeta = getProviderStatusMeta(agentId);
 
   return `
     <div class="stage-header-meta stage-header-actions model-actions">
-      <span class="${statusClass}">${escapeHtml(connected ? t("stage.connected") : t("stage.disconnected"))}</span>
+      <span class="${statusMeta.className}">${escapeHtml(statusMeta.label)}</span>
       <label class="model-select-group">
         <span>${escapeHtml(t("stage.model"))}</span>
         <select
@@ -1279,8 +1365,8 @@ function renderAgentModelControls(agentId) {
               : options
                   .map(
                     (option) => `
-                      <option value="${escapeHtml(option.name)}" ${option.name === currentModel ? "selected" : ""}>
-                        ${escapeHtml(option.name)}
+                      <option value="${escapeHtml(option.id)}" ${option.id === currentModel ? "selected" : ""}>
+                        ${escapeHtml(option.label || option.name)}
                       </option>
                     `
                   )
@@ -1384,19 +1470,15 @@ async function startBackendTask(taskInput) {
 
 async function refreshBackendAvailability() {
   try {
-    const health = await apiFetch("/health");
+    await apiFetch("/health");
     state.connection.backendAvailable = true;
-    state.connection.ollamaConnected = Boolean(health.ollama?.available);
   } catch {
     state.connection.backendAvailable = false;
-    state.connection.ollamaConnected = false;
     state.connection.models = [];
-    state.connection.configuredModels = {
-      leader: "",
-      planner: "",
-      writer: "",
-      reviewer: "",
-    };
+    state.connection.allModels = [];
+    state.connection.enabledRouteIds = [];
+    state.connection.providers = createDefaultProviders();
+    state.connection.configuredRoutes = createDefaultRoutes();
   }
 }
 
@@ -1405,31 +1487,65 @@ async function refreshBackendModels() {
 
   try {
     const runtime = await apiFetch("/models");
-    state.connection.ollamaConnected = Boolean(runtime.connected);
+    state.connection.providers = {
+      ...createDefaultProviders(),
+      ...(runtime.providers || {}),
+    };
     state.connection.models = runtime.models || [];
-    state.connection.configuredModels = {
-      ...state.connection.configuredModels,
-      ...(runtime.configured || {}),
+    state.connection.allModels = runtime.allModels || runtime.models || [];
+    state.connection.enabledRouteIds = runtime.enabledRouteIds || [];
+    state.connection.configuredRoutes = {
+      ...createDefaultRoutes(),
+      ...(runtime.routes || {}),
     };
   } catch {
     state.connection.models = [];
+    state.connection.allModels = [];
+    state.connection.enabledRouteIds = [];
   }
 }
 
-async function updateAgentRuntimeModel(agentId, model) {
+async function updateAgentRuntimeModel(agentId, routeId) {
   const runtime = await apiFetch("/models", {
     method: "POST",
     body: JSON.stringify({
       role: agentId,
-      model,
+      routeId,
     }),
   });
 
-  state.connection.ollamaConnected = Boolean(runtime.connected);
+  state.connection.providers = {
+    ...createDefaultProviders(),
+    ...(runtime.providers || {}),
+  };
   state.connection.models = runtime.models || [];
-  state.connection.configuredModels = {
-    ...state.connection.configuredModels,
-    ...(runtime.configured || {}),
+  state.connection.allModels = runtime.allModels || runtime.models || [];
+  state.connection.enabledRouteIds = runtime.enabledRouteIds || [];
+  state.connection.configuredRoutes = {
+    ...createDefaultRoutes(),
+    ...(runtime.routes || {}),
+  };
+}
+
+async function updateRouteEnabled(routeId, enabled) {
+  const runtime = await apiFetch("/models", {
+    method: "POST",
+    body: JSON.stringify({
+      routeId,
+      enabled,
+    }),
+  });
+
+  state.connection.providers = {
+    ...createDefaultProviders(),
+    ...(runtime.providers || {}),
+  };
+  state.connection.models = runtime.models || [];
+  state.connection.allModels = runtime.allModels || runtime.models || [];
+  state.connection.enabledRouteIds = runtime.enabledRouteIds || [];
+  state.connection.configuredRoutes = {
+    ...createDefaultRoutes(),
+    ...(runtime.routes || {}),
   };
 }
 
@@ -2210,6 +2326,76 @@ function renderOptionGroup(options, activeId, dataAttribute) {
   `;
 }
 
+function renderLLMFilterRows(kind) {
+  const models = getLLMFilterModels(kind);
+
+  if (models.length === 0) {
+    return `
+      <div class="info-block">
+        <p>${escapeHtml(t("stage.noModels"))}</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="model-filter-list">
+      ${models
+        .map((model) => {
+          const providerState = state.connection.providers[model.provider];
+          const providerReady = providerState?.available || false;
+          const providerConfigured = providerState?.configured || model.provider === "ollama";
+          const providerStatus = !providerConfigured
+            ? "Key Missing"
+            : providerReady
+              ? t("stage.enabled")
+              : t("stage.disabled");
+
+          return `
+            <label class="model-filter-row">
+              <div class="model-filter-copy">
+                <strong>${escapeHtml(model.label || model.name)}</strong>
+                <span>${escapeHtml(providerStatus)}</span>
+              </div>
+              <input
+                type="checkbox"
+                class="model-filter-toggle"
+                data-route-toggle="${escapeHtml(model.id)}"
+                ${isRouteEnabled(model.id) ? "checked" : ""}
+              />
+            </label>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderLLMSettingsContent() {
+  return `
+    <div class="stage-layout">
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("stage.llmFilters"))}</p>
+        <h3>${escapeHtml(t("entries.llm"))}</h3>
+        <p>${escapeHtml(t("stage.llmFiltersNote"))}</p>
+      </div>
+
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("stage.localModels"))}</p>
+        <h3>${escapeHtml(t("stage.localModels"))}</h3>
+        <p>${escapeHtml(t("stage.localModelsNote"))}</p>
+        ${renderLLMFilterRows("local")}
+      </div>
+
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("stage.apiModels"))}</p>
+        <h3>${escapeHtml(t("stage.apiModels"))}</h3>
+        <p>${escapeHtml(t("stage.apiModelsNote"))}</p>
+        ${renderLLMFilterRows("api")}
+      </div>
+    </div>
+  `;
+}
+
 function renderThemeSettingsContent() {
   const options = ["default", "dark", "light"].map((id) => ({
     id,
@@ -2265,6 +2451,7 @@ function renderStageContentBody() {
   if (workspace === "usage" && entry === "teamUsage") return renderUsageTeamContent();
   if (workspace === "usage" && entry === "projectUsage") return renderUsageProjectContent();
   if (workspace === "usage" && entry === "budget") return renderUsageBudgetContent();
+  if (workspace === "settings" && entry === "llm") return renderLLMSettingsContent();
   if (workspace === "settings" && entry === "theme") return renderThemeSettingsContent();
   if (workspace === "settings" && entry === "language") return renderLanguageSettingsContent();
 
@@ -2476,6 +2663,7 @@ function bindStageActions() {
   const languageButtons = [...document.querySelectorAll("[data-language-option]")];
   const teamLayoutButtons = [...document.querySelectorAll("[data-team-layout]")];
   const modelSelects = [...document.querySelectorAll("[data-model-role]")];
+  const routeToggles = [...document.querySelectorAll("[data-route-toggle]")];
 
   treeItems.forEach((button) => {
     button.addEventListener("click", () => {
@@ -2551,14 +2739,32 @@ function bindStageActions() {
   modelSelects.forEach((select) => {
     select.addEventListener("change", async () => {
       const role = select.dataset.modelRole;
-      const model = select.value;
+      const routeId = select.value;
 
-      if (!role || !model) return;
+      if (!role || !routeId) return;
 
       select.disabled = true;
 
       try {
-        await updateAgentRuntimeModel(role, model);
+        await updateAgentRuntimeModel(role, routeId);
+      } catch (error) {
+        console.error(error);
+        window.alert(t("stage.syncFailed"));
+      } finally {
+        renderApp();
+      }
+    });
+  });
+
+  routeToggles.forEach((toggle) => {
+    toggle.addEventListener("change", async () => {
+      const routeId = toggle.dataset.routeToggle;
+      if (!routeId) return;
+
+      toggle.disabled = true;
+
+      try {
+        await updateRouteEnabled(routeId, toggle.checked);
       } catch (error) {
         console.error(error);
         window.alert(t("stage.syncFailed"));

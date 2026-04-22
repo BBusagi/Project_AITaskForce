@@ -1,6 +1,6 @@
 const http = require("node:http");
 const { URL } = require("node:url");
-const { host, port, ollamaBaseUrl } = require("./config");
+const { host, port, providers } = require("./config");
 const { createAndStartTask } = require("./orchestrator");
 const {
   getTask,
@@ -11,7 +11,7 @@ const {
   buildAgentsView,
   buildSnapshot,
 } = require("./store");
-const { checkOllama, listModels, getConfiguredModels, setRoleModel } = require("./ollama");
+const { buildRouteId, getProviderHealth, getRuntimeCatalog, setRoleRoute, setRouteEnabled } = require("./model-gateway");
 
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {
@@ -65,46 +65,66 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (req.method === "GET" && pathname === "/api/health") {
-      const ollamaAvailable = await checkOllama();
+      const providerStates = await getProviderHealth();
       sendJson(res, 200, {
         status: "ok",
         service: "ai-task-force-server",
+        providers: providerStates,
         ollama: {
-          baseUrl: ollamaBaseUrl,
-          available: ollamaAvailable,
+          baseUrl: providers.ollama.baseUrl,
+          available: providerStates.ollama?.available || false,
         },
       });
       return;
     }
 
     if (req.method === "GET" && pathname === "/api/models") {
-      const ollamaAvailable = await checkOllama();
-      const availableModels = ollamaAvailable ? await listModels() : [];
+      const runtimeCatalog = await getRuntimeCatalog();
       sendJson(res, 200, {
-        provider: "ollama",
-        connected: ollamaAvailable,
-        configured: getConfiguredModels(),
-        models: availableModels,
+        providers: runtimeCatalog.providers,
+        routes: runtimeCatalog.routes,
+        models: runtimeCatalog.models,
+        allModels: runtimeCatalog.allModels,
+        enabledRouteIds: runtimeCatalog.enabledRouteIds,
       });
       return;
     }
 
     if (req.method === "POST" && pathname === "/api/models") {
       const body = await readJsonBody(req);
-      if (!body.role || !body.model) {
-        sendJson(res, 400, { error: "role and model are required" });
+      if (body.routeId && typeof body.enabled === "boolean" && !body.role) {
+        setRouteEnabled(body.routeId, body.enabled);
+        const runtimeCatalog = await getRuntimeCatalog();
+
+        sendJson(res, 200, {
+          providers: runtimeCatalog.providers,
+          routes: runtimeCatalog.routes,
+          models: runtimeCatalog.models,
+          allModels: runtimeCatalog.allModels,
+          enabledRouteIds: runtimeCatalog.enabledRouteIds,
+        });
         return;
       }
 
-      const configured = setRoleModel(body.role, body.model);
-      const ollamaAvailable = await checkOllama();
-      const availableModels = ollamaAvailable ? await listModels() : [];
+      if (!body.role || (!body.routeId && !body.model)) {
+        sendJson(res, 400, { error: "role and routeId are required" });
+        return;
+      }
+
+      const routeId =
+        body.routeId ||
+        (typeof body.model === "string" && body.model.includes("::")
+          ? body.model
+          : buildRouteId(body.provider || "ollama", body.model));
+      setRoleRoute(body.role, routeId);
+      const runtimeCatalog = await getRuntimeCatalog();
 
       sendJson(res, 200, {
-        provider: "ollama",
-        connected: ollamaAvailable,
-        configured,
-        models: availableModels,
+        providers: runtimeCatalog.providers,
+        routes: runtimeCatalog.routes,
+        models: runtimeCatalog.models,
+        allModels: runtimeCatalog.allModels,
+        enabledRouteIds: runtimeCatalog.enabledRouteIds,
       });
       return;
     }
