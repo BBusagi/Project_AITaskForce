@@ -459,6 +459,32 @@ h3 {
   flex-wrap: wrap;
 }
 
+.stage-header-actions {
+  gap: 6px;
+}
+
+.view-switch {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.view-switch:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.view-switch.is-active {
+  background: var(--accent-soft);
+  border-color: rgba(88, 210, 255, 0.3);
+  color: var(--text);
+}
+
 .stage-layout {
   flex: 1 1 auto;
   min-height: 0;
@@ -492,13 +518,26 @@ h3 {
 
 .dialog-stream,
 .card-grid,
-.timeline-list-inner {
+.timeline-list-inner,
+.agent-grid {
   display: grid;
   gap: 12px;
 }
 
 .card-grid {
   padding: 20px 22px;
+}
+
+.agent-grid {
+  padding: 20px 22px;
+}
+
+.agent-grid.is-list {
+  grid-template-columns: 1fr;
+}
+
+.agent-grid.is-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
 .message-card,
@@ -518,6 +557,51 @@ h3 {
   background: rgba(88, 210, 255, 0.08);
 }
 
+.agent-card {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.agent-card-grid {
+  flex-direction: column;
+}
+
+.agent-thumb {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  background: linear-gradient(145deg, rgba(88, 210, 255, 0.16), rgba(255, 150, 85, 0.18));
+  border: 1px solid var(--line);
+}
+
+.agent-thumb svg {
+  width: 28px;
+  height: 28px;
+}
+
+.agent-card-grid .agent-thumb {
+  width: 64px;
+  height: 64px;
+}
+
+.agent-card-grid .agent-thumb svg {
+  width: 32px;
+  height: 32px;
+}
+
+.agent-card-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .message-head,
 .timeline-head,
 .agent-head {
@@ -531,7 +615,8 @@ h3 {
 
 .message-body,
 .timeline-item p,
-.info-block p {
+.info-block p,
+.agent-card p {
   line-height: 1.65;
   color: #d3e0ea;
 }
