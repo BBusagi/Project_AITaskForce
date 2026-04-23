@@ -178,6 +178,9 @@ const dictionaries = {
       list: "List",
       grid: "Grid",
       progress: "Progress",
+      finalOutput: "Final Output",
+      intermediateOutputs: "Intermediate Outputs",
+      outputPending: "Output will appear here after Leader completes final synthesis.",
       model: "Model",
       modelRoute: "Model Route",
       llmFilters: "LLM Filters",
@@ -476,6 +479,9 @@ const dictionaries = {
       list: "列表",
       grid: "网格",
       progress: "进度",
+      finalOutput: "最终输出",
+      intermediateOutputs: "中间输出",
+      outputPending: "Leader 完成最终整合后，输出结果会显示在这里。",
       model: "模型",
       modelRoute: "模型路由",
       connected: "Ollama 已连接",
@@ -644,6 +650,7 @@ const state = {
   sidebarCollapsed: false,
   theme: "default",
   language: "en",
+  scrollPositions: {},
   currentTask: {
     id: "task-001",
     titleKey: "demo.taskTitle",
@@ -652,6 +659,9 @@ const state = {
     owner: "planner",
     progress: 36,
     lastUpdate: "09:46",
+    finalOutput: null,
+    errorMessage: null,
+    subtasks: [],
   },
   agents: [
     {
@@ -1539,6 +1549,49 @@ function pushTimeline(type, text) {
   });
 }
 
+function tagScrollContainers() {
+  const workspace = state.activeWorkspace;
+  const entry = getActiveEntryId();
+  const sidebarScroller = workspaceSidebarContentEl.querySelector(".sidebar-top");
+  const stageScroller =
+    workspaceStageContentEl.querySelector(".chat-thread-stream") ||
+    workspaceStageContentEl.querySelector(".stage-layout") ||
+    workspaceStageContentEl.querySelector(".timeline-list") ||
+    workspaceStageContentEl.querySelector(".agent-grid");
+
+  if (sidebarScroller) {
+    sidebarScroller.dataset.scrollKey = `sidebar:${workspace}`;
+  }
+
+  if (stageScroller) {
+    stageScroller.dataset.scrollKey = `stage:${workspace}:${entry}`;
+  }
+}
+
+function captureScrollPositions() {
+  document.querySelectorAll("[data-scroll-key]").forEach((element) => {
+    const key = element.dataset.scrollKey;
+    if (!key) return;
+
+    state.scrollPositions[key] = {
+      left: element.scrollLeft,
+      top: element.scrollTop,
+      atBottom: element.scrollHeight - element.scrollTop - element.clientHeight < 8,
+    };
+  });
+}
+
+function restoreScrollPositions() {
+  document.querySelectorAll("[data-scroll-key]").forEach((element) => {
+    const key = element.dataset.scrollKey;
+    const position = key ? state.scrollPositions[key] : null;
+    if (!position) return;
+
+    element.scrollLeft = position.left;
+    element.scrollTop = position.atBottom ? element.scrollHeight : position.top;
+  });
+}
+
 async function apiFetch(path, options = {}) {
   const response = await fetch(`${state.connection.apiBaseUrl}${path}`, {
     headers: {
@@ -1742,6 +1795,9 @@ function applyBackendSnapshot(snapshot) {
     owner: task.stageOwnerId || "leader",
     progress: taskProgressByStatus(task.status),
     lastUpdate: formatTimestamp(task.updatedAt),
+    finalOutput: task.finalOutput || null,
+    errorMessage: task.errorMessage || null,
+    subtasks: snapshot.subtasks || [],
   };
 
   state.messages = snapshot.messages.map((message) => ({
@@ -1801,7 +1857,13 @@ async function startBackendTask(taskInput) {
     owner: "leader",
     progress: taskProgressByStatus(result.status),
     lastUpdate: formatTime(),
+    finalOutput: null,
+    errorMessage: null,
+    subtasks: [],
   };
+  state.activeWorkspace = "task";
+  state.activeEntry.task = "overview";
+  state.sidebarCollapsed = false;
   renderApp();
 
   await pollTaskSnapshot(result.taskId);
@@ -2301,6 +2363,10 @@ function renderAgentDetailContent(agentId) {
 }
 
 function renderTaskOverviewContent() {
+  const finalOutput = state.currentTask.finalOutput;
+  const errorMessage = state.currentTask.errorMessage;
+  const subtasks = state.currentTask.subtasks || [];
+
   return `
     <div class="stage-layout">
       <div class="info-block">
@@ -2312,6 +2378,42 @@ function renderTaskOverviewContent() {
           <span class="tag">${escapeHtml(roleLabel(state.currentTask.owner))}</span>
           <span class="tag">${escapeHtml(state.currentTask.lastUpdate)}</span>
         </div>
+      </div>
+
+      <div class="info-block output-block">
+        <p class="eyebrow">${escapeHtml(t("stage.finalOutput"))}</p>
+        ${
+          errorMessage
+            ? `<pre class="output-text is-error">${escapeHtml(errorMessage)}</pre>`
+            : finalOutput
+              ? `<pre class="output-text">${escapeHtml(finalOutput)}</pre>`
+              : `<p>${escapeHtml(t("stage.outputPending"))}</p>`
+        }
+      </div>
+
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("stage.intermediateOutputs"))}</p>
+        ${
+          subtasks.length
+            ? `
+              <div class="subtask-output-list">
+                ${subtasks
+                  .map(
+                    (subtask) => `
+                      <article class="subtask-output">
+                        <div class="timeline-head">
+                          <span>${escapeHtml(roleLabel(subtask.assignedAgentId))} / ${escapeHtml(subtask.type)}</span>
+                          <span>${escapeHtml(subtask.status)}</span>
+                        </div>
+                        <pre>${escapeHtml(subtask.outputText || subtask.reviewComment || "No output yet.")}</pre>
+                      </article>
+                    `
+                  )
+                  .join("")}
+              </div>
+            `
+            : `<p>${escapeHtml(t("stage.outputPending"))}</p>`
+        }
       </div>
     </div>
   `;
@@ -2966,7 +3068,13 @@ function runLocalTaskLifecycle(userInput) {
     owner: "leader",
     progress: 8,
     lastUpdate: formatTime(),
+    finalOutput: null,
+    errorMessage: null,
+    subtasks: [],
   };
+  state.activeWorkspace = "task";
+  state.activeEntry.task = "overview";
+  state.sidebarCollapsed = false;
 
   pushMessage("leader", t("responses.taskReceived"));
   pushTimeline("task_created", t("timelineText.taskCreated"));
@@ -3205,6 +3313,8 @@ function bindStageActions() {
 }
 
 function renderApp() {
+  captureScrollPositions();
+
   desktopLayoutEl.classList.toggle("sidebar-collapsed", state.sidebarCollapsed);
 
   railButtons.forEach((button) => {
@@ -3214,7 +3324,11 @@ function renderApp() {
   updateShellChrome();
   renderSidebar();
   renderStage();
+  tagScrollContainers();
+  restoreScrollPositions();
   bindStageActions();
+
+  window.requestAnimationFrame(restoreScrollPositions);
 }
 
 railButtons.forEach((button) => {

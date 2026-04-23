@@ -1,3 +1,5 @@
+请将以下会话进行总结，然后将总结结果分别以中文，日文，英文，进行输出
+
 在当前的 AI Task Force プロジェクト中，我们正在从一个 simple chat interface 转向一个更复杂的 AI workspace system。
 现在的重点是 building a multi-agent workflow，其中 Leader 会负责 task orchestration，而 Planner, Writer, Reviewer 则分别承担不同的职责。
 
