@@ -867,17 +867,79 @@ h3 {
   color: #d9e7f0;
 }
 
+.task-stage-map {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.task-stage-node {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.task-stage-node span {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+}
+
+.task-stage-node strong {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-stage-node.is-done {
+  border-color: rgba(141, 231, 168, 0.24);
+}
+
+.task-stage-node.is-done span,
+.task-stage-node.is-done strong {
+  color: var(--ok);
+}
+
+.task-stage-node.is-active {
+  border-color: rgba(88, 210, 255, 0.34);
+  background: var(--accent-soft);
+}
+
+.task-stage-node.is-active span,
+.task-stage-node.is-active strong {
+  color: var(--text);
+}
+
 .output-block {
-  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
 .output-text,
 .subtask-output pre {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin: 0;
-  max-height: 360px;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
   line-height: 1.55;
   color: var(--text);
   font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
@@ -885,6 +947,9 @@ h3 {
 }
 
 .output-text {
+  flex: 1 1 auto;
+  min-height: 220px;
+  max-height: min(56dvh, 620px);
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -899,15 +964,33 @@ h3 {
 
 .subtask-output-list {
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 .subtask-output {
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.subtask-output summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  list-style: none;
+}
+
+.subtask-output summary::-webkit-details-marker {
+  display: none;
 }
 
 .subtask-output pre {
+  max-height: 240px;
+  padding: 0 12px 12px;
   color: #d3e0ea;
 }
 

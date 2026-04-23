@@ -83,6 +83,7 @@ const dictionaries = {
       portfolio: "Portfolio",
       modules: "Modules",
       breakdown: "Breakdown",
+      tasks: "Tasks",
       appearance: "Appearance",
       localization: "Localization",
       modelRouting: "Model Routing",
@@ -231,7 +232,6 @@ const dictionaries = {
     buttons: {
       askProgress: "Ask Current Progress",
       askOwner: "Ask Current Owner",
-      loadDemo: "Load Demo Task",
       publishTask: "Publish Task",
       askStatus: "Ask Status",
       openChat: "Open Chat",
@@ -251,7 +251,7 @@ const dictionaries = {
       noDirectChats: "No direct agent chats yet. Open one from the Team workspace.",
     },
     placeholder:
-      "Example: Refactor the desktop shell into an outer icon rail, a collapsible resource sidebar, and a full workspace stage.",
+      "Example: Translate this paragraph into English and Japanese, then review whether the wording is natural.",
     themes: {
       default: {
         label: "Default",
@@ -294,15 +294,17 @@ const dictionaries = {
       writerSubmitted: "Draft submitted",
       reviewerWait: "Waiting for draft",
       reviewerReviewing: "Reviewing structure and delivery",
+      noActiveTask: "No active task",
       designerStub: "stub: reserved for future design integration",
       programmerStub: "stub: reserved for future development",
     },
     summary: {
+      empty: "No task has been published yet. Open a Leader chat and use Task Creation when a request is ready to run.",
       pending: "Leader has received the task and is preparing the fixed workflow.",
-      planning: "Planner is aligning the outer rail, resource tree, and workspace stage.",
-      writing: "Writer is filling the selected workspace content and shell copy.",
-      reviewing: "Reviewer is checking whether the shell reads like a real desktop client.",
-      completed: "The current shell pass is complete and ready for another task.",
+      planning: "Planner is turning the confirmed request into execution steps, constraints, and agent handoffs.",
+      writing: "Writer is producing the requested draft or transformation from the planner output.",
+      reviewing: "Reviewer is checking completeness, clarity, consistency, and instruction adherence.",
+      completed: "The current task is complete and ready for inspection.",
     },
     notes: {
       leader:
@@ -315,15 +317,15 @@ const dictionaries = {
       handoffQuestion: "Who owns the task right now? What is the rest of the team doing?",
       handoffAnswer: "Current team state: {{agents}}.",
       taskReceived:
-        "Task received. The current shell uses an outer product rail, a collapsible resource sidebar, and a full workspace stage.",
+        "Task received. Leader has published the request into the fixed workflow.",
       planning:
-        "Planner has started work and is defining the shell structure and output boundaries.",
+        "Planner has started work and is defining the execution boundary and output format.",
       writing:
-        "Planner has completed the breakdown. Writer is now building the workspace content.",
+        "Planner has completed the breakdown. Writer is now producing the requested output.",
       reviewing:
-        "Reviewer is checking whether the shell now reads like a real desktop client.",
+        "Reviewer is checking whether the output follows the original request and quality boundary.",
       completed:
-        "The current task is complete. Click the active rail icon again to collapse or reopen the middle sidebar.",
+        "The current task is complete. Open the Task workspace to inspect the final output and intermediate stages.",
     },
     timelineText: {
       taskCreated: "A new task was added to the system.",
@@ -331,22 +333,6 @@ const dictionaries = {
       writingStarted: "Writer started producing workspace content.",
       reviewStarted: "Reviewer started checking the output.",
       finalReady: "Leader delivered the final response.",
-    },
-    demo: {
-      taskTitle: "Rebuild the desktop shell into a Slack / VS Code style layout",
-      taskDescription:
-        "Use an outer icon rail, a collapsible resource sidebar, and a full workspace stage instead of an internal dashboard layout.",
-      messageWelcome:
-        "Welcome to AI Task Force. Use the outer rail to switch workspaces, the middle sidebar to select resources, and the stage to inspect full content.",
-      messageRequest:
-        "I need a Slack / VS Code style shell where the left icon rail controls the middle sidebar, and the right side stays as the full workspace stage.",
-      messageAck:
-        "Received. This pass tightens the shell hierarchy, removes explanatory dashboard copy, and keeps the middle sidebar collapsible.",
-      timelineCreated: "Task created and assigned to Leader.",
-      timelinePlanning: "Planner started defining the shell and switching model.",
-      timelineWriting: "Writer is waiting to fill the stage content after planning.",
-      demoPrompt:
-        "Refactor the desktop shell into a product-grade outer rail with a collapsible resource sidebar, and remove explanatory dashboard copy.",
     },
   },
   "zh-CN": {
@@ -387,6 +373,7 @@ const dictionaries = {
       portfolio: "项目总览",
       modules: "模块",
       breakdown: "拆分",
+      tasks: "任务",
       appearance: "外观",
       localization: "语言",
     },
@@ -523,7 +510,6 @@ const dictionaries = {
     buttons: {
       askProgress: "询问当前进度",
       askOwner: "询问当前负责人",
-      loadDemo: "载入演示任务",
       publishTask: "发布任务",
       askStatus: "询问状态",
       openChat: "打开会话",
@@ -543,7 +529,7 @@ const dictionaries = {
       noDirectChats: "还没有 agent 直接会话，请先从 Team 工作区创建。",
     },
     placeholder:
-      "例如：把桌面端重构为外层 icon rail、可收起的资源中栏，以及完整右侧工作区。",
+      "例如：把这段文字翻译为英文和日文，并检查表达是否自然。",
     themes: {
       default: {
         label: "默认",
@@ -586,15 +572,17 @@ const dictionaries = {
       writerSubmitted: "草稿已提交",
       reviewerWait: "等待草稿",
       reviewerReviewing: "检查结构与交付质量",
+      noActiveTask: "暂无当前任务",
       designerStub: "stub: 预留给后续设计能力接入",
       programmerStub: "stub: 预留给后续开发能力接入",
     },
     summary: {
+      empty: "当前还没有发布任务。请打开 Leader 会话，并在需求明确后使用 Task Creation 发布。",
       pending: "Leader 已接收任务，正在准备进入固定工作流。",
-      planning: "Planner 正在对齐外层 rail、资源树和主工作区的关系。",
-      writing: "Writer 正在补齐选中工作区的内容与交互文案。",
-      reviewing: "Reviewer 正在检查当前壳层是否更像真实桌面客户端。",
-      completed: "当前壳层迭代已完成，可以继续处理下一项任务。",
+      planning: "Planner 正在把已确认需求拆解为执行步骤、约束和 agent 分工。",
+      writing: "Writer 正在根据规划输出生成本次任务需要的内容。",
+      reviewing: "Reviewer 正在检查完整性、清晰度、一致性和指令遵循情况。",
+      completed: "当前任务已完成，可以查看最终输出。",
     },
     notes: {
       leader:
@@ -605,11 +593,11 @@ const dictionaries = {
       statusAnswer: "当前任务处于 {{phase}}，负责人是 {{owner}}。可以进入 Task 工作区查看完整阶段摘要。",
       handoffQuestion: "现在是谁在负责？团队其他成员在做什么？",
       handoffAnswer: "当前团队状态如下：{{agents}}。",
-      taskReceived: "任务已接收。当前壳层采用外层产品 rail、可收起资源中栏和完整右侧工作区。",
-      planning: "Planner 已开始工作，正在定义壳层结构和输出边界。",
-      writing: "Planner 已完成拆解，Writer 正在生成工作区内容。",
-      reviewing: "Reviewer 正在检查现在的界面是否更像真正的桌面客户端。",
-      completed: "当前任务已完成。再次点击当前 rail 图标，可以收起或重新展开中栏。",
+      taskReceived: "任务已接收。Leader 已将需求发布到固定工作流。",
+      planning: "Planner 已开始工作，正在定义执行边界和输出格式。",
+      writing: "Planner 已完成拆解，Writer 正在生成本次任务需要的输出。",
+      reviewing: "Reviewer 正在检查输出是否符合原始需求和质量边界。",
+      completed: "当前任务已完成。请进入 Task 工作区查看最终输出和中间阶段。",
     },
     timelineText: {
       taskCreated: "新任务已加入系统。",
@@ -617,21 +605,6 @@ const dictionaries = {
       writingStarted: "Writer 开始生成工作区内容。",
       reviewStarted: "Reviewer 开始检查输出。",
       finalReady: "Leader 已完成最终交付。",
-    },
-    demo: {
-      taskTitle: "把桌面端重构成 Slack / VS Code 风格的壳层",
-      taskDescription: "使用外层 icon rail、可收起资源中栏，以及完整右侧工作区，替代页面内 dashboard 布局。",
-      messageWelcome:
-        "欢迎进入 AI Task Force。使用最外层 rail 切换工作区，中栏选择资源，右侧查看完整内容。",
-      messageRequest:
-        "我需要类似 Slack / VS Code 的壳层，左侧 icon rail 控制中栏，右侧保持为完整工作区。",
-      messageAck:
-        "已收到。本轮会继续收紧壳层层级，删除说明型 dashboard 文案，并保留中栏收起能力。",
-      timelineCreated: "任务已创建并交给 Leader。",
-      timelinePlanning: "Planner 开始定义壳层结构和切换方式。",
-      timelineWriting: "Writer 正等待规划完成后补齐工作区内容。",
-      demoPrompt:
-        "把桌面端重构为产品级的外层 rail + 可收起资源中栏，并删除说明感太强的 dashboard 文案。",
     },
   },
 };
@@ -651,34 +624,37 @@ const state = {
   theme: "default",
   language: "en",
   scrollPositions: {},
+  tasks: [],
+  nextLocalTaskNumber: 1,
   currentTask: {
-    id: "task-001",
-    titleKey: "demo.taskTitle",
-    descriptionKey: "demo.taskDescription",
-    phase: "planning",
-    owner: "planner",
-    progress: 36,
-    lastUpdate: "09:46",
+    id: "--",
+    titleKey: "agentTasks.noActiveTask",
+    descriptionKey: "summary.empty",
+    phase: "pending",
+    owner: "leader",
+    progress: 0,
+    lastUpdate: "--",
     finalOutput: null,
     errorMessage: null,
     subtasks: [],
+    isEmpty: true,
   },
   agents: [
     {
       id: "leader",
-      status: "working",
-      taskMode: "title",
+      status: "idle",
+      taskKey: "agentTasks.leaderNext",
       skills: ["routing", "planning-handoff", "final-response"],
     },
     {
       id: "planner",
-      status: "working",
-      taskKey: "agentTasks.plannerStructuring",
+      status: "idle",
+      taskKey: "agentTasks.plannerWait",
       skills: ["task-breakdown", "constraints", "output-schema"],
     },
     {
       id: "writer",
-      status: "waiting",
+      status: "idle",
       taskKey: "agentTasks.writerWait",
       skills: ["drafting", "rewrite", "formatting"],
     },
@@ -701,44 +677,9 @@ const state = {
       skills: ["implementation", "electron-integration", "component-logic"],
     },
   ],
-  messages: [
-    {
-      id: "msg-001",
-      sender: "leader",
-      time: "09:42",
-      textKey: "demo.messageWelcome",
-    },
-    {
-      id: "msg-002",
-      sender: "user",
-      time: "09:44",
-      textKey: "demo.messageRequest",
-    },
-    {
-      id: "msg-003",
-      sender: "leader",
-      time: "09:46",
-      textKey: "demo.messageAck",
-    },
-  ],
+  messages: [],
   chatConversations: [],
-  timeline: [
-    {
-      type: "task_created",
-      time: "09:12",
-      textKey: "demo.timelineCreated",
-    },
-    {
-      type: "planning_started",
-      time: "09:18",
-      textKey: "demo.timelinePlanning",
-    },
-    {
-      type: "writing_started",
-      time: "09:24",
-      textKey: "demo.timelineWriting",
-    },
-  ],
+  timeline: [],
   connection: {
     apiBaseUrl: API_BASE_URL,
     backendAvailable: false,
@@ -1033,6 +974,10 @@ function getAgentById(id) {
 
 function getProjectRecord(id) {
   return state.projects.records.find((record) => record.id === id);
+}
+
+function isTaskEntry(entryId) {
+  return typeof entryId === "string" && entryId.startsWith("task_");
 }
 
 function isAgentChatEntry(entryId) {
@@ -1412,6 +1357,14 @@ function buildWorkspaceMeta() {
             { id: "timeline", label: t("entries.timeline"), meta: t("meta.log") },
           ],
         },
+        {
+          label: t("groups.tasks"),
+          items: state.tasks.map((task) => ({
+            id: task.id,
+            label: task.title,
+            meta: formatPhase(normalizeTaskPhase(task.status)),
+          })),
+        },
       ],
     },
     projects: {
@@ -1481,6 +1434,7 @@ function getActiveEntry() {
 }
 
 function buildTaskSummary() {
+  if (state.currentTask.isEmpty) return t("summary.empty");
   return t(`summary.${state.currentTask.phase}`);
 }
 
@@ -1549,23 +1503,46 @@ function pushTimeline(type, text) {
   });
 }
 
+function upsertTaskSummary(task) {
+  const summary = {
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    updatedAt: task.updatedAt || new Date().toISOString(),
+  };
+  const existingIndex = state.tasks.findIndex((item) => item.id === task.id);
+
+  if (existingIndex >= 0) {
+    state.tasks[existingIndex] = summary;
+  } else {
+    state.tasks.unshift(summary);
+  }
+
+  state.tasks.sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
+}
+
 function tagScrollContainers() {
   const workspace = state.activeWorkspace;
   const entry = getActiveEntryId();
   const sidebarScroller = workspaceSidebarContentEl.querySelector(".sidebar-top");
-  const stageScroller =
-    workspaceStageContentEl.querySelector(".chat-thread-stream") ||
-    workspaceStageContentEl.querySelector(".stage-layout") ||
-    workspaceStageContentEl.querySelector(".timeline-list") ||
-    workspaceStageContentEl.querySelector(".agent-grid");
+  const stageScrollers = [
+    workspaceStageContentEl.querySelector(".chat-thread-stream"),
+    workspaceStageContentEl.querySelector(".stage-layout"),
+    workspaceStageContentEl.querySelector(".timeline-list"),
+    workspaceStageContentEl.querySelector(".agent-grid"),
+  ].filter(Boolean);
 
   if (sidebarScroller) {
     sidebarScroller.dataset.scrollKey = `sidebar:${workspace}`;
   }
 
-  if (stageScroller) {
-    stageScroller.dataset.scrollKey = `stage:${workspace}:${entry}`;
-  }
+  stageScrollers.forEach((stageScroller, index) => {
+    stageScroller.dataset.scrollKey = `stage:${workspace}:${entry}:${index}`;
+  });
+
+  workspaceStageContentEl.querySelectorAll("[data-output-scroll-key]").forEach((element) => {
+    element.dataset.scrollKey = `output:${workspace}:${entry}:${element.dataset.outputScrollKey}`;
+  });
 }
 
 function captureScrollPositions() {
@@ -1787,6 +1764,7 @@ function stopTaskPolling() {
 
 function applyBackendSnapshot(snapshot) {
   const task = snapshot.task;
+  upsertTaskSummary(task);
   state.currentTask = {
     id: task.id,
     title: task.title,
@@ -1842,16 +1820,22 @@ async function startBackendTask(taskInput) {
   const result = await apiFetch("/tasks", {
     method: "POST",
     body: JSON.stringify({
-      title: taskInput.length > 64 ? `${taskInput.slice(0, 64)}...` : taskInput,
       userInput: taskInput,
       priority: "medium",
     }),
   });
 
+  const taskTitle = result.title || result.taskId;
   state.connection.activeTaskId = result.taskId;
+  upsertTaskSummary({
+    id: result.taskId,
+    title: taskTitle,
+    status: result.status,
+    updatedAt: new Date().toISOString(),
+  });
   state.currentTask = {
     id: result.taskId,
-    title: taskInput.length > 64 ? `${taskInput.slice(0, 64)}...` : taskInput,
+    title: taskTitle,
     description: taskInput,
     phase: normalizeTaskPhase(result.status),
     owner: "leader",
@@ -1862,7 +1846,7 @@ async function startBackendTask(taskInput) {
     subtasks: [],
   };
   state.activeWorkspace = "task";
-  state.activeEntry.task = "overview";
+  state.activeEntry.task = result.taskId;
   state.sidebarCollapsed = false;
   renderApp();
 
@@ -2366,6 +2350,7 @@ function renderTaskOverviewContent() {
   const finalOutput = state.currentTask.finalOutput;
   const errorMessage = state.currentTask.errorMessage;
   const subtasks = state.currentTask.subtasks || [];
+  const currentPhaseIndex = phases.indexOf(state.currentTask.phase);
 
   return `
     <div class="stage-layout">
@@ -2380,13 +2365,35 @@ function renderTaskOverviewContent() {
         </div>
       </div>
 
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("stage.stageFlow"))}</p>
+        <div class="task-stage-map">
+          ${phases
+            .map((phase, index) => {
+              const className =
+                index < currentPhaseIndex
+                  ? "task-stage-node is-done"
+                  : index === currentPhaseIndex
+                    ? "task-stage-node is-active"
+                    : "task-stage-node";
+              return `
+                <div class="${className}">
+                  <span>${index + 1}</span>
+                  <strong>${escapeHtml(formatPhase(phase))}</strong>
+                </div>
+              `;
+            })
+            .join("")}
+        </div>
+      </div>
+
       <div class="info-block output-block">
         <p class="eyebrow">${escapeHtml(t("stage.finalOutput"))}</p>
         ${
           errorMessage
-            ? `<pre class="output-text is-error">${escapeHtml(errorMessage)}</pre>`
+            ? `<pre class="output-text is-error" data-output-scroll-key="final">${escapeHtml(errorMessage)}</pre>`
             : finalOutput
-              ? `<pre class="output-text">${escapeHtml(finalOutput)}</pre>`
+              ? `<pre class="output-text" data-output-scroll-key="final">${escapeHtml(finalOutput)}</pre>`
               : `<p>${escapeHtml(t("stage.outputPending"))}</p>`
         }
       </div>
@@ -2400,13 +2407,13 @@ function renderTaskOverviewContent() {
                 ${subtasks
                   .map(
                     (subtask) => `
-                      <article class="subtask-output">
-                        <div class="timeline-head">
+                      <details class="subtask-output">
+                        <summary>
                           <span>${escapeHtml(roleLabel(subtask.assignedAgentId))} / ${escapeHtml(subtask.type)}</span>
                           <span>${escapeHtml(subtask.status)}</span>
-                        </div>
-                        <pre>${escapeHtml(subtask.outputText || subtask.reviewComment || "No output yet.")}</pre>
-                      </article>
+                        </summary>
+                        <pre data-output-scroll-key="${escapeHtml(subtask.id)}">${escapeHtml(subtask.outputText || subtask.reviewComment || "No output yet.")}</pre>
+                      </details>
                     `
                   )
                   .join("")}
@@ -2953,6 +2960,7 @@ function renderStageContentBody() {
   if (workspace === "chat" && entry === "checkins") return renderCheckinsContent();
   if (workspace === "team" && entry === "overview") return renderTeamOverviewContent();
   if (workspace === "team") return renderAgentDetailContent(entry);
+  if (workspace === "task" && isTaskEntry(entry)) return renderTaskOverviewContent();
   if (workspace === "task" && entry === "overview") return renderTaskOverviewContent();
   if (workspace === "task" && entry === "stages") return renderStageFlowContent();
   if (workspace === "task" && entry === "timeline") return renderTimelineContent();
@@ -3060,9 +3068,11 @@ function runLocalTaskLifecycle(userInput) {
     clearTimeout(simulationTimer);
   }
 
+  const localTaskTitle = `Task${String(state.nextLocalTaskNumber).padStart(3, "0")}`;
+  state.nextLocalTaskNumber += 1;
   state.currentTask = {
     id: `task-${String(Math.floor(Math.random() * 900) + 100)}`,
-    title: userInput.length > 64 ? `${userInput.slice(0, 64)}...` : userInput,
+    title: localTaskTitle,
     description: userInput,
     phase: "pending",
     owner: "leader",
@@ -3072,8 +3082,14 @@ function runLocalTaskLifecycle(userInput) {
     errorMessage: null,
     subtasks: [],
   };
+  upsertTaskSummary({
+    id: state.currentTask.id,
+    title: state.currentTask.title,
+    status: state.currentTask.phase,
+    updatedAt: new Date().toISOString(),
+  });
   state.activeWorkspace = "task";
-  state.activeEntry.task = "overview";
+  state.activeEntry.task = state.currentTask.id;
   state.sidebarCollapsed = false;
 
   pushMessage("leader", t("responses.taskReceived"));
@@ -3237,18 +3253,6 @@ function bindStageActions() {
         return;
       }
 
-      if (type === "demo") {
-        state.activeWorkspace = "chat";
-        const conversation = createAgentConversation("leader");
-        state.activeEntry.chat = conversation.id;
-        state.sidebarCollapsed = false;
-        renderApp();
-
-        const input = document.getElementById("agent-chat-input-leader");
-        if (input) {
-          input.value = t("demo.demoPrompt");
-        }
-      }
     });
   });
 
@@ -3339,7 +3343,9 @@ railButtons.forEach((button) => {
 
 loadLanguage();
 loadTheme();
-setAgentStatusesByPhase(state.currentTask.phase);
+if (!state.currentTask.isEmpty) {
+  setAgentStatusesByPhase(state.currentTask.phase);
+}
 renderApp();
 void syncRuntimeModels().then(() => {
   renderApp();

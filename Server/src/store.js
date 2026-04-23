@@ -42,6 +42,7 @@ const state = {
   events: new Map(),
   messages: new Map(),
   taskRuns: new Map(),
+  nextTaskNumber: 1,
 };
 
 function nowIso() {
@@ -74,9 +75,12 @@ function getStatusOwner(status) {
 function createTask({ title, userInput, priority = "medium", createdBy = "user" }) {
   const timestamp = nowIso();
   const taskId = newTaskId();
+  const taskNumber = state.nextTaskNumber;
+  state.nextTaskNumber += 1;
   const task = {
     id: taskId,
-    title,
+    number: taskNumber,
+    title: title?.trim() || `Task${String(taskNumber).padStart(3, "0")}`,
     userInput,
     status: "pending",
     priority,

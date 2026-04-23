@@ -209,6 +209,7 @@ const server = http.createServer(async (req, res) => {
       const task = createAndStartTask(body);
       sendJson(res, 201, {
         taskId: task.id,
+        title: task.title,
         status: task.status,
       });
       return;

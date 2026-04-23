@@ -36,6 +36,22 @@ function describeRoute(role) {
   return `${route.provider}:${route.model}`;
 }
 
+function compactLogText(value, maxLength = 220) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized;
+}
+
+function logTaskEvent(taskId, stage, message, metadata = {}) {
+  const metadataText = Object.entries(metadata)
+    .map(([key, value]) => `${key}=${JSON.stringify(compactLogText(value))}`)
+    .join(" ");
+  console.log(`TASK EVENT task=${taskId} stage=${stage} message=${JSON.stringify(compactLogText(message))}${metadataText ? ` ${metadataText}` : ""}`);
+}
+
+function textLength(value) {
+  return String(value || "").length;
+}
+
 function buildPlannerPrompt(task) {
   return [
     "You are the Planner agent in AI Task Force.",
@@ -61,15 +77,26 @@ function buildWriterPrompt(task, planText) {
   ].join("\n");
 }
 
-function buildReviewerPrompt(task, draftText) {
+function buildReviewerPrompt(task, planText, draftText) {
   return [
     "You are the Reviewer agent in AI Task Force.",
-    "Return: result, issues found, revision guidance, rationale.",
-    "Be concise.",
+    "You are a quality gate, not a second writer.",
+    "Check whether the Writer output satisfies the original user request and the Planner constraints.",
+    "Fail the draft if any requested language, format, scope, key constraint, or deliverable is missing.",
+    "Do not approve just because the draft is fluent.",
+    "Return exactly these fields:",
+    "result: pass | fail",
+    "issues found: concise bullet list",
+    "revision guidance: concise bullet list",
+    "rationale: one sentence",
     "",
     `Task title: ${task.title}`,
+    `User input: ${task.userInput}`,
     "",
-    "Draft:",
+    "Planner output:",
+    planText,
+    "",
+    "Writer draft:",
     draftText,
   ].join("\n");
 }
@@ -125,6 +152,11 @@ async function runTask(taskId) {
     const task = getTask(taskId);
     if (!task) return;
 
+    logTaskEvent(taskId, "leader_published", "Leader published task and started fixed workflow.", {
+      title: task.title,
+      inputChars: textLength(task.userInput),
+    });
+
     updateTask(taskId, { status: "planning", stageOwnerId: "planner" });
     addEvent(taskId, {
       actorType: "system",
@@ -133,6 +165,9 @@ async function runTask(taskId) {
       message: "Planner started decomposing the task.",
     });
     addLifecycleMessage(taskId, "leader", `Planner has started on route ${describeRoute("planner")}. Building a structured task plan.`);
+    logTaskEvent(taskId, "planner_started", "Planner started decomposing the task.", {
+      route: describeRoute("planner"),
+    });
 
     const planResult = await generateOrFallback(
       "planner",
@@ -163,6 +198,11 @@ async function runTask(taskId) {
         model: planResult.model,
       },
     });
+    logTaskEvent(taskId, "planner_completed", "Planner completed structured plan.", {
+      provider: planResult.provider,
+      model: planResult.model,
+      outputChars: textLength(planResult.text),
+    });
 
     await sleep(500);
 
@@ -174,6 +214,9 @@ async function runTask(taskId) {
       message: "Writer started the first draft.",
     });
     addLifecycleMessage(taskId, "leader", `Writer is generating the first draft through route ${describeRoute("writer")}.`);
+    logTaskEvent(taskId, "writer_started", "Writer received task and started draft.", {
+      route: describeRoute("writer"),
+    });
 
     const draftResult = await generateOrFallback(
       "writer",
@@ -204,6 +247,11 @@ async function runTask(taskId) {
         model: draftResult.model,
       },
     });
+    logTaskEvent(taskId, "writer_completed", "Writer completed draft.", {
+      provider: draftResult.provider,
+      model: draftResult.model,
+      outputChars: textLength(draftResult.text),
+    });
 
     await sleep(500);
 
@@ -215,10 +263,13 @@ async function runTask(taskId) {
       message: "Reviewer started the quality check.",
     });
     addLifecycleMessage(taskId, "leader", `Reviewer is checking the draft through route ${describeRoute("reviewer")}.`);
+    logTaskEvent(taskId, "reviewer_started", "Reviewer started quality check.", {
+      route: describeRoute("reviewer"),
+    });
 
     const reviewResult = await generateOrFallback(
       "reviewer",
-      buildReviewerPrompt(task, draftResult.text),
+      buildReviewerPrompt(task, planResult.text, draftResult.text),
       [
         "result: pass",
         "issues found: none blocking",
@@ -227,7 +278,7 @@ async function runTask(taskId) {
       ].join("\n")
     );
 
-    const passed = !/\bresult:\s*fail\b/i.test(reviewResult.text);
+    const passed = /\bresult:\s*pass\b/i.test(reviewResult.text) && !/\bresult:\s*fail\b/i.test(reviewResult.text);
     const reviewSubtask = addSubtask(taskId, {
       type: "review",
       assignedAgentId: "reviewer",
@@ -248,6 +299,11 @@ async function runTask(taskId) {
         model: reviewResult.model,
       },
     });
+    logTaskEvent(taskId, passed ? "reviewer_passed" : "reviewer_failed", passed ? "Reviewer approved draft." : "Reviewer rejected draft.", {
+      provider: reviewResult.provider,
+      model: reviewResult.model,
+      outputChars: textLength(reviewResult.text),
+    });
 
     if (!passed) {
       updateTask(taskId, {
@@ -262,10 +318,16 @@ async function runTask(taskId) {
         message: "Task stopped after review failure.",
       });
       addLifecycleMessage(taskId, "leader", "The workflow stopped after review failure. Retry support can be added next.");
+      logTaskEvent(taskId, "task_failed", "Task stopped after review failure.", {
+        reviewerOutput: reviewResult.text,
+      });
       return;
     }
 
     addLifecycleMessage(taskId, "leader", `Leader is synthesizing the final response through route ${describeRoute("leader")}.`);
+    logTaskEvent(taskId, "leader_started", "Leader started final synthesis.", {
+      route: describeRoute("leader"),
+    });
 
     const finalResult = await generateOrFallback(
       "leader",
@@ -290,6 +352,11 @@ async function runTask(taskId) {
       },
     });
     addLifecycleMessage(taskId, "leader", "Final output is ready.");
+    logTaskEvent(taskId, "leader_completed", "Leader completed final output.", {
+      provider: finalResult.provider,
+      model: finalResult.model,
+      outputChars: textLength(finalResult.text),
+    });
   } catch (error) {
     updateTask(taskId, {
       status: "failed",
@@ -303,6 +370,9 @@ async function runTask(taskId) {
       message: error.message,
     });
     addLifecycleMessage(taskId, "leader", `Workflow failed: ${error.message}`);
+    logTaskEvent(taskId, "task_failed", "Workflow failed with exception.", {
+      error: error.message,
+    });
   } finally {
     state.taskRuns.delete(taskId);
   }
@@ -310,7 +380,7 @@ async function runTask(taskId) {
 
 function createAndStartTask(input) {
   const task = createTask({
-    title: input.title?.trim() || summarizeTitle(input.userInput),
+    title: input.title?.trim(),
     userInput: input.userInput,
     priority: input.priority || "medium",
   });
@@ -329,6 +399,11 @@ function createAndStartTask(input) {
   });
 
   addLifecycleMessage(task.id, "leader", "Leader received the task and started the ATF workflow.");
+  logTaskEvent(task.id, "task_created", "Task created from publication confirmation.", {
+    title: task.title,
+    detailApi: `/api/tasks/${task.id}`,
+    snapshotApi: `/api/tasks/${task.id}/snapshot`,
+  });
   void runTask(task.id);
   return task;
 }
