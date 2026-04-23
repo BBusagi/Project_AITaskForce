@@ -215,6 +215,34 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    const taskRetryMatch = pathname.match(/^\/api\/tasks\/([^/]+)\/retry$/);
+    if (req.method === "POST" && taskRetryMatch) {
+      const sourceTask = getTask(taskRetryMatch[1]);
+      if (!sourceTask) {
+        notFound(res);
+        return;
+      }
+
+      if (!["failed", "human_confirmation"].includes(sourceTask.status)) {
+        sendJson(res, 409, { error: "Only failed or human-confirmation tasks can be retried" });
+        return;
+      }
+
+      const task = createAndStartTask({
+        title: undefined,
+        userInput: sourceTask.userInput,
+        priority: sourceTask.priority,
+      });
+      console.log(`TASK RETRY source=${sourceTask.id} next=${task.id} title=${JSON.stringify(task.title)}`);
+      sendJson(res, 201, {
+        taskId: task.id,
+        title: task.title,
+        status: task.status,
+        retryOf: sourceTask.id,
+      });
+      return;
+    }
+
     const taskDetailMatch = pathname.match(/^\/api\/tasks\/([^/]+)$/);
     if (req.method === "GET" && taskDetailMatch) {
       const task = getTask(taskDetailMatch[1]);

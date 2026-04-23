@@ -1,4 +1,4 @@
-const phases = ["pending", "planning", "writing", "reviewing", "revising", "completed"];
+const phases = ["pending", "planning", "writing", "reviewing", "revising", "human_confirmation", "completed"];
 const ROUTABLE_AGENT_IDS = new Set(["leader", "planner", "writer", "reviewer"]);
 
 const THEME_STORAGE_KEY = "atf-desktop-theme";
@@ -149,6 +149,7 @@ const dictionaries = {
       writing: "Writing",
       reviewing: "Reviewing",
       revising: "Revising",
+      human_confirmation: "Human Confirm",
       completed: "Completed",
     },
     events: {
@@ -158,6 +159,7 @@ const dictionaries = {
       review_started: "Review Started",
       revision_started: "Revision Started",
       revision_completed: "Revision Completed",
+      human_confirmation_required: "Human Confirmation Required",
       final_output_ready: "Final Output Ready",
     },
     stage: {
@@ -251,6 +253,7 @@ const dictionaries = {
       taskCreation: "Task Creation",
       confirmPublish: "Confirm Publish",
       continueNegotiation: "Continue Negotiation",
+      retryTask: "Retry Task",
     },
     chatPanel: {
       leaderThreadIntro: "Requirement negotiation",
@@ -317,6 +320,7 @@ const dictionaries = {
       writing: "Writer is producing the requested draft or transformation from the planner output.",
       reviewing: "Reviewer is checking completeness, clarity, consistency, and instruction adherence.",
       revising: "Writer is applying Reviewer feedback before the next quality check.",
+      human_confirmation: "Automated review reached its retry limit and needs manual confirmation.",
       completed: "The current task is complete and ready for inspection.",
     },
     notes: {
@@ -449,6 +453,7 @@ const dictionaries = {
       writing: "生成中",
       reviewing: "审核中",
       revising: "修订中",
+      human_confirmation: "人工确认",
       completed: "已完成",
     },
     events: {
@@ -458,6 +463,7 @@ const dictionaries = {
       review_started: "开始审核",
       revision_started: "开始修订",
       revision_completed: "修订完成",
+      human_confirmation_required: "需要人工确认",
       final_output_ready: "最终输出已完成",
     },
     stage: {
@@ -542,6 +548,7 @@ const dictionaries = {
       taskCreation: "任务创建",
       confirmPublish: "确认发布",
       continueNegotiation: "继续协商",
+      retryTask: "重新尝试任务",
     },
     chatPanel: {
       leaderThreadIntro: "需求协商",
@@ -608,6 +615,7 @@ const dictionaries = {
       writing: "Writer 正在根据规划输出生成本次任务需要的内容。",
       reviewing: "Reviewer 正在检查完整性、清晰度、一致性和指令遵循情况。",
       revising: "Writer 正在根据 Reviewer 的反馈修订输出，然后进入下一轮审核。",
+      human_confirmation: "自动审核已达到重试上限，需要人工确认。",
       completed: "当前任务已完成，可以查看最终输出。",
     },
     notes: {
@@ -1003,6 +1011,7 @@ function taskProgressByStatus(status) {
     writing: 68,
     reviewing: 86,
     revising: 78,
+    human_confirmation: 96,
     completed: 100,
     failed: 100,
   };
@@ -1012,6 +1021,7 @@ function taskProgressByStatus(status) {
 function normalizeTaskPhase(status) {
   if (status === "failed") return "reviewing";
   if (status === "revising") return "revising";
+  if (status === "human_confirmation") return "human_confirmation";
   if (phases.includes(status)) return status;
   return "pending";
 }
@@ -1867,20 +1877,12 @@ async function pollTaskSnapshot(taskId) {
   applyBackendSnapshot(snapshot);
   renderApp();
 
-  if (snapshot.task.status === "completed" || snapshot.task.status === "failed") {
+  if (snapshot.task.status === "completed" || snapshot.task.status === "failed" || snapshot.task.status === "human_confirmation") {
     stopTaskPolling();
   }
 }
 
-async function startBackendTask(taskInput) {
-  const result = await apiFetch("/tasks", {
-    method: "POST",
-    body: JSON.stringify({
-      userInput: taskInput,
-      priority: "medium",
-    }),
-  });
-
+function activatePendingTask(result, description) {
   const taskTitle = result.title || result.taskId;
   state.connection.activeTaskId = result.taskId;
   upsertTaskSummary({
@@ -1892,7 +1894,7 @@ async function startBackendTask(taskInput) {
   state.currentTask = {
     id: result.taskId,
     title: taskTitle,
-    description: taskInput,
+    description,
     phase: normalizeTaskPhase(result.status),
     owner: "leader",
     progress: taskProgressByStatus(result.status),
@@ -1905,16 +1907,42 @@ async function startBackendTask(taskInput) {
   state.activeEntry.task = result.taskId;
   state.sidebarCollapsed = false;
   renderApp();
+}
 
-  await pollTaskSnapshot(result.taskId);
+async function watchTask(taskId) {
+  await pollTaskSnapshot(taskId);
   stopTaskPolling();
   taskPollTimer = setInterval(() => {
-    void pollTaskSnapshot(result.taskId).catch(() => {
+    void pollTaskSnapshot(taskId).catch(() => {
       stopTaskPolling();
       state.connection.backendAvailable = false;
       renderApp();
     });
   }, TASK_POLL_INTERVAL_MS);
+}
+
+async function startBackendTask(taskInput) {
+  const result = await apiFetch("/tasks", {
+    method: "POST",
+    body: JSON.stringify({
+      userInput: taskInput,
+      priority: "medium",
+    }),
+  });
+
+  activatePendingTask(result, taskInput);
+  await watchTask(result.taskId);
+}
+
+async function retryCurrentTask() {
+  if (!state.currentTask.id || state.currentTask.id === "--") return;
+
+  const result = await apiFetch(`/tasks/${state.currentTask.id}/retry`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  activatePendingTask(result, state.currentTask.description);
+  await watchTask(result.taskId);
 }
 
 async function refreshBackendAvailability() {
@@ -2438,6 +2466,7 @@ function renderTaskOverviewContent() {
   const errorMessage = state.currentTask.errorMessage;
   const subtasks = state.currentTask.subtasks || [];
   const currentPhaseIndex = phases.indexOf(state.currentTask.phase);
+  const canRetryTask = ["reviewing", "human_confirmation"].includes(state.currentTask.phase) && Boolean(errorMessage);
 
   return `
     <div class="stage-layout">
@@ -2450,6 +2479,17 @@ function renderTaskOverviewContent() {
           <span class="tag">${escapeHtml(roleLabel(state.currentTask.owner))}</span>
           <span class="tag">${escapeHtml(state.currentTask.lastUpdate)}</span>
         </div>
+        ${
+          canRetryTask
+            ? `
+              <div class="agent-inline-actions">
+                <button class="btn-secondary" type="button" data-retry-task>
+                  ${escapeHtml(t("buttons.retryTask"))}
+                </button>
+              </div>
+            `
+            : ""
+        }
       </div>
 
       <div class="info-block">
@@ -3285,6 +3325,7 @@ function bindStageActions() {
   const directChatForms = [...document.querySelectorAll("[data-chat-conversation-form]")];
   const confirmLeaderPublishButtons = [...document.querySelectorAll("[data-confirm-leader-publish]")];
   const cancelLeaderPublishButtons = [...document.querySelectorAll("[data-cancel-leader-publish]")];
+  const retryTaskButtons = [...document.querySelectorAll("[data-retry-task]")];
 
   treeItems.forEach((button) => {
     button.addEventListener("click", () => {
@@ -3298,6 +3339,20 @@ function bindStageActions() {
 
   cancelLeaderPublishButtons.forEach((button) => {
     button.addEventListener("click", () => cancelLeaderTaskDraft(button.dataset.cancelLeaderPublish));
+  });
+
+  retryTaskButtons.forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+
+      try {
+        await retryCurrentTask();
+      } catch (error) {
+        console.error(error);
+        window.alert(formatModelRequestError(error));
+        renderApp();
+      }
+    });
   });
 
   agentChatButtons.forEach((button) => {

@@ -11,7 +11,8 @@ const {
 const { generate, resolveRoute } = require("./model-gateway");
 const { providers } = require("./config");
 
-const MAX_REVIEW_ATTEMPTS = 3;
+const MAX_REVIEW_ATTEMPTS = 2;
+const REVIEW_RUBRIC = ["completeness", "correctness", "format", "consistency", "regression"];
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -42,6 +43,113 @@ function logTaskEvent(taskId, stage, message, metadata = {}) {
 
 function textLength(value) {
   return String(value || "").length;
+}
+
+function stripCodeFence(text) {
+  return String(text || "")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+function extractJsonObject(text) {
+  const stripped = stripCodeFence(text);
+  try {
+    return JSON.parse(stripped);
+  } catch {}
+
+  const start = stripped.indexOf("{");
+  const end = stripped.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    try {
+      return JSON.parse(stripped.slice(start, end + 1));
+    } catch {}
+  }
+
+  return null;
+}
+
+function normalizeWriterSubmission(text) {
+  const parsed = extractJsonObject(text);
+  const submission = parsed && typeof parsed === "object" ? parsed : {};
+  return {
+    changed: Array.isArray(submission.changed) ? submission.changed.map(String) : [],
+    unchanged: Array.isArray(submission.unchanged) ? submission.unchanged.map(String) : [],
+    why: typeof submission.why === "string" ? submission.why : "",
+    draft_text: typeof submission.draft_text === "string" && submission.draft_text.trim() ? submission.draft_text : String(text || "").trim(),
+    raw: text,
+    parseOk: Boolean(parsed),
+  };
+}
+
+function normalizeReviewDecision(text, attempt) {
+  const parsed = extractJsonObject(text);
+  const decision = parsed && typeof parsed === "object" ? parsed : {};
+  const result = String(decision.result || "").toLowerCase() === "pass" ? "pass" : "fail";
+  const rubric = REVIEW_RUBRIC.reduce((acc, key) => {
+    const entry = decision.rubric && typeof decision.rubric === "object" ? decision.rubric[key] : null;
+    acc[key] = {
+      status: entry?.status === "pass" ? "pass" : entry?.status === "fail" ? "fail" : "unknown",
+      severity: entry?.severity || "unknown",
+      issues: Array.isArray(entry?.issues) ? entry.issues.map(String) : [],
+    };
+    return acc;
+  }, {});
+
+  const blockingIssues = Array.isArray(decision.blocking_issues) ? decision.blocking_issues : [];
+  if (!parsed) {
+    blockingIssues.push({
+      id: "R_PARSE",
+      category: "format",
+      severity: "blocking",
+      affected_area: "review_output",
+      description: "Reviewer did not return valid machine-readable JSON.",
+      required_change: "Reviewer must return the required JSON schema.",
+    });
+  } else if (result === "fail" && blockingIssues.length === 0) {
+    blockingIssues.push({
+      id: "R_UNSPECIFIED",
+      category: "correctness",
+      severity: "blocking",
+      affected_area: "draft_text",
+      description: decision.rationale || "Reviewer failed the draft without a structured blocking issue.",
+      required_change: "Resolve the failed rubric items and return a structured revision.",
+    });
+  }
+
+  return {
+    result,
+    attempt: Number(decision.attempt) || attempt,
+    scope: decision.scope || (attempt === 1 ? "full" : "prior_issues_and_changed_regions"),
+    rubric,
+    blocking_issues: blockingIssues,
+    minor_issues: Array.isArray(decision.minor_issues) ? decision.minor_issues : [],
+    resolved_issue_ids: Array.isArray(decision.resolved_issue_ids) ? decision.resolved_issue_ids.map(String) : [],
+    next_action: decision.next_action || (result === "pass" ? "approve" : "revise"),
+    rationale: typeof decision.rationale === "string" ? decision.rationale : String(text || "").trim(),
+    raw: text,
+    parseOk: Boolean(parsed),
+  };
+}
+
+function isReviewPassed(decision) {
+  if (!decision || decision.result !== "pass") return false;
+  if ((decision.blocking_issues || []).length > 0) return false;
+  return !Object.values(decision.rubric || {}).some((entry) => entry.severity === "blocking");
+}
+
+function publicWriterSubmission(submission) {
+  return {
+    changed: submission.changed,
+    unchanged: submission.unchanged,
+    why: submission.why,
+    draft_text: submission.draft_text,
+  };
+}
+
+function formatJson(value) {
+  return JSON.stringify(value, null, 2);
 }
 
 function nowIso() {
@@ -180,13 +288,21 @@ function buildWriterPrompt(task, planText) {
   return [
     "You are the Writer agent in AI Task Force.",
     "Produce the actual user-requested deliverable.",
-    "Do not summarize the task metadata.",
-    "Do not write placeholder bullets such as task focus, proposed output, backend route, or workflow status.",
     "Use the original user input as the source content and the Planner output as execution guidance.",
     "If the user requested summarization, translation, rewriting, formatting, or multi-language output, perform that work directly.",
     "Respect every requested language, heading, structure, and output format.",
-    "Return only the draft content that should be reviewed.",
     "Do not include hidden reasoning or thinking tags.",
+    "Return only valid JSON with exactly this schema:",
+    JSON.stringify(
+      {
+        changed: ["Initial draft created from the user request and planner constraints."],
+        unchanged: [],
+        why: "Brief reason for the drafting choices.",
+        draft_text: "The actual user-facing draft content to review.",
+      },
+      null,
+      2
+    ),
     "",
     `Task title: ${task.title}`,
     "Original user input:",
@@ -200,15 +316,33 @@ function buildWriterPrompt(task, planText) {
 function buildReviewerPrompt(task, planText, draftText) {
   return [
     "You are the Reviewer agent in AI Task Force.",
-    "You are a quality gate, not a second writer.",
-    "Check whether the Writer output satisfies the original user request and the Planner constraints.",
-    "Fail the draft if any requested language, format, scope, key constraint, or deliverable is missing.",
-    "Do not approve just because the draft is fluent.",
-    "Return exactly these fields:",
-    "result: pass | fail",
-    "issues found: concise bullet list",
-    "revision guidance: concise bullet list",
-    "rationale: one sentence",
+    "Use only this fixed rubric: completeness, correctness, format, consistency, regression.",
+    "Do not invent additional review categories.",
+    "Review the full draft only because this is the first review attempt.",
+    "Separate blocking issues from minor issues. Reject only for blocking issues.",
+    "Use stable issue IDs such as R1, R2, R3.",
+    "Return only valid JSON with exactly this schema:",
+    JSON.stringify(
+      {
+        result: "pass | fail",
+        attempt: 1,
+        scope: "full",
+        rubric: {
+          completeness: { status: "pass | fail", severity: "none | minor | blocking", issues: [] },
+          correctness: { status: "pass | fail", severity: "none | minor | blocking", issues: [] },
+          format: { status: "pass | fail", severity: "none | minor | blocking", issues: [] },
+          consistency: { status: "pass | fail", severity: "none | minor | blocking", issues: [] },
+          regression: { status: "pass | fail", severity: "none | minor | blocking", issues: [] },
+        },
+        blocking_issues: [{ id: "R1", category: "format", severity: "blocking", affected_area: "section name", description: "specific defect", required_change: "specific fix" }],
+        minor_issues: [],
+        resolved_issue_ids: [],
+        next_action: "approve | revise | human_confirm",
+        rationale: "One concise sentence.",
+      },
+      null,
+      2
+    ),
     "",
     `Task title: ${task.title}`,
     `User input: ${task.userInput}`,
@@ -216,19 +350,31 @@ function buildReviewerPrompt(task, planText, draftText) {
     "Planner output:",
     planText,
     "",
-    "Writer draft:",
+    "Writer draft_text:",
     draftText,
   ].join("\n");
 }
 
-function buildWriterRevisionPrompt(task, planText, previousDraft, reviewText, attemptNumber) {
+function buildWriterRevisionPrompt(task, planText, previousSubmission, reviewDecision, attemptNumber) {
   return [
     "You are the Writer agent in AI Task Force.",
-    "Revise the previous draft using the Reviewer feedback.",
+    "Revise the previous draft using only the machine-readable Reviewer feedback.",
     "Produce the corrected user-facing deliverable only.",
-    "Do not explain the revision process.",
+    "Preserve previously correct content unless the Reviewer explicitly marks it as affected.",
+    "Only change areas required by blocking issues or directly related consistency fixes.",
     "Do not include hidden reasoning or thinking tags.",
     "Respect every requested language, heading, structure, and output format.",
+    "Return only valid JSON with exactly this schema:",
+    JSON.stringify(
+      {
+        changed: ["Specific changed area and linked issue ID, e.g. R1."],
+        unchanged: ["Specific correct areas intentionally preserved."],
+        why: "Brief reason connecting changes to Reviewer issue IDs.",
+        draft_text: "The revised user-facing draft content to review.",
+      },
+      null,
+      2
+    ),
     "",
     `Task title: ${task.title}`,
     `Revision attempt: ${attemptNumber}`,
@@ -239,15 +385,64 @@ function buildWriterRevisionPrompt(task, planText, previousDraft, reviewText, at
     "Planner output:",
     planText,
     "",
-    "Previous Writer draft:",
-    previousDraft,
+    "Previous Writer submission JSON:",
+    formatJson(previousSubmission),
     "",
-    "Reviewer feedback to address:",
-    reviewText,
+    "Reviewer decision JSON:",
+    formatJson(reviewDecision),
   ].join("\n");
 }
 
-function buildFinalOutput(task, planText, draftText, reviewText) {
+function buildReviewerRevisionPrompt(task, planText, previousSubmission, currentSubmission, priorReviewDecision, attemptNumber) {
+  return [
+    "You are the Reviewer agent in AI Task Force.",
+    "Use only this fixed rubric: completeness, correctness, format, consistency, regression.",
+    "This is a revision review. Do not perform a fresh full free-form review.",
+    "Review only: unresolved prior blocking issues, current changed areas, and regressions caused by those changes.",
+    "Do not reject for unrelated new preferences. Minor non-blocking issues must not fail the task.",
+    "Use existing issue IDs when the same issue remains. Create new issue IDs only for regressions caused by changed areas.",
+    "Return only valid JSON with exactly this schema:",
+    JSON.stringify(
+      {
+        result: "pass | fail",
+        attempt: attemptNumber,
+        scope: "prior_issues_and_changed_regions",
+        rubric: {
+          completeness: { status: "pass | fail", severity: "none | minor | blocking", issues: [] },
+          correctness: { status: "pass | fail", severity: "none | minor | blocking", issues: [] },
+          format: { status: "pass | fail", severity: "none | minor | blocking", issues: [] },
+          consistency: { status: "pass | fail", severity: "none | minor | blocking", issues: [] },
+          regression: { status: "pass | fail", severity: "none | minor | blocking", issues: [] },
+        },
+        blocking_issues: [{ id: "R1", category: "format", severity: "blocking", affected_area: "section name", description: "specific defect", required_change: "specific fix" }],
+        minor_issues: [],
+        resolved_issue_ids: [],
+        next_action: "approve | revise | human_confirm",
+        rationale: "One concise sentence.",
+      },
+      null,
+      2
+    ),
+    "",
+    `Task title: ${task.title}`,
+    "Original user input:",
+    task.userInput,
+    "",
+    "Planner output:",
+    planText,
+    "",
+    "Prior Writer submission JSON:",
+    formatJson(previousSubmission),
+    "",
+    "Current Writer submission JSON:",
+    formatJson(currentSubmission),
+    "",
+    "Prior Reviewer decision JSON:",
+    formatJson(priorReviewDecision),
+  ].join("\n");
+}
+
+function buildFinalOutput(task, planText, draftText, reviewDecision) {
   return [
     `Task: ${task.title}`,
     "",
@@ -258,11 +453,11 @@ function buildFinalOutput(task, planText, draftText, reviewText) {
     draftText,
     "",
     "Review Summary:",
-    reviewText,
+    formatJson(reviewDecision),
   ].join("\n");
 }
 
-function buildLeaderPrompt(task, planText, draftText, reviewText) {
+function buildLeaderPrompt(task, planText, draftText, reviewDecision) {
   return [
     "You are the Leader agent in AI Task Force.",
     "Deliver the final user-facing response for the completed workflow.",
@@ -277,8 +472,8 @@ function buildLeaderPrompt(task, planText, draftText, reviewText) {
     "Writer draft:",
     draftText,
     "",
-    "Reviewer result:",
-    reviewText,
+    "Reviewer decision JSON:",
+    formatJson(reviewDecision),
   ].join("\n");
 }
 
@@ -347,10 +542,14 @@ async function runTask(taskId) {
 
     let draftResult = null;
     let reviewResult = null;
+    let writerSubmission = null;
+    let previousSubmissionForReview = null;
+    let reviewDecision = null;
     let reviewPassed = false;
 
     for (let attempt = 1; attempt <= MAX_REVIEW_ATTEMPTS; attempt += 1) {
       const isRevision = attempt > 1;
+      previousSubmissionForReview = writerSubmission;
 
       updateTask(taskId, { status: isRevision ? "revising" : "writing", stageOwnerId: "writer" });
       addEvent(taskId, {
@@ -378,11 +577,13 @@ async function runTask(taskId) {
         status: "running",
       });
       const writerPrompt = isRevision
-        ? buildWriterRevisionPrompt(task, planResult.text, draftResult.text, reviewResult.text, attempt)
+        ? buildWriterRevisionPrompt(task, planResult.text, writerSubmission, reviewDecision, attempt)
         : buildWriterPrompt(task, planResult.text);
       draftResult = await runModelForSubtask(taskId, draftSubtask.id, "writer", writerPrompt);
+      writerSubmission = normalizeWriterSubmission(draftResult.text);
       updateSubtask(taskId, draftSubtask.id, {
-        outputText: draftResult.text,
+        outputText: formatJson(publicWriterSubmission(writerSubmission)),
+        writerSubmission: publicWriterSubmission(writerSubmission),
         status: "completed",
       });
       addEvent(taskId, {
@@ -425,13 +626,17 @@ async function runTask(taskId) {
         inputText: draftResult.text,
         status: "running",
       });
-      reviewResult = await runModelForSubtask(taskId, reviewSubtask.id, "reviewer", buildReviewerPrompt(task, planResult.text, draftResult.text));
-
-      reviewPassed = /\bresult:\s*pass\b/i.test(reviewResult.text) && !/\bresult:\s*fail\b/i.test(reviewResult.text);
+      const reviewPrompt = isRevision
+        ? buildReviewerRevisionPrompt(task, planResult.text, previousSubmissionForReview, writerSubmission, reviewDecision, attempt)
+        : buildReviewerPrompt(task, planResult.text, writerSubmission.draft_text);
+      reviewResult = await runModelForSubtask(taskId, reviewSubtask.id, "reviewer", reviewPrompt);
+      reviewDecision = normalizeReviewDecision(reviewResult.text, attempt);
+      reviewPassed = isReviewPassed(reviewDecision);
       updateSubtask(taskId, reviewSubtask.id, {
-        outputText: reviewResult.text,
+        outputText: formatJson(reviewDecision),
         status: reviewPassed ? "completed" : "rejected",
-        reviewComment: reviewPassed ? null : reviewResult.text,
+        reviewComment: reviewPassed ? null : formatJson(reviewDecision),
+        reviewDecision,
       });
 
       addEvent(taskId, {
@@ -458,7 +663,7 @@ async function runTask(taskId) {
         addLifecycleMessage(taskId, "leader", `Reviewer rejected attempt ${attempt}. Feedback has been returned to Writer for revision.`);
         logTaskEvent(taskId, "revision_requested", "Reviewer feedback returned to Writer.", {
           nextAttempt: attempt + 1,
-          reviewChars: textLength(reviewResult.text),
+          blockingIssues: reviewDecision.blocking_issues.length,
         });
         await sleep(500);
       }
@@ -466,20 +671,20 @@ async function runTask(taskId) {
 
     if (!reviewPassed) {
       updateTask(taskId, {
-        status: "failed",
+        status: "human_confirmation",
         stageOwnerId: "leader",
-        errorMessage: `Review failed after ${MAX_REVIEW_ATTEMPTS} attempts.`,
+        errorMessage: `Human confirmation required after ${MAX_REVIEW_ATTEMPTS} failed automated review attempts.`,
       });
       addEvent(taskId, {
         actorType: "system",
         actorId: "leader",
-        eventType: "task_failed",
-        message: `Task stopped after ${MAX_REVIEW_ATTEMPTS} failed review attempts.`,
+        eventType: "human_confirmation_required",
+        message: `Task escalated to human confirmation after ${MAX_REVIEW_ATTEMPTS} failed automated review attempts.`,
       });
-      addLifecycleMessage(taskId, "leader", `The workflow stopped after ${MAX_REVIEW_ATTEMPTS} failed review attempts.`);
-      logTaskEvent(taskId, "task_failed", "Task stopped after max review attempts.", {
+      addLifecycleMessage(taskId, "leader", `Human confirmation is required after ${MAX_REVIEW_ATTEMPTS} failed automated review attempts.`);
+      logTaskEvent(taskId, "human_confirmation_required", "Task escalated after max automated review attempts.", {
         attempts: MAX_REVIEW_ATTEMPTS,
-        reviewChars: textLength(reviewResult?.text),
+        blockingIssues: reviewDecision?.blocking_issues?.length || 0,
       });
       return;
     }
@@ -492,14 +697,14 @@ async function runTask(taskId) {
     const finalSubtask = addSubtask(taskId, {
       type: "summary",
       assignedAgentId: "leader",
-      inputText: reviewResult.text,
+      inputText: formatJson(reviewDecision),
       status: "running",
     });
     const finalResult = await runModelForSubtask(
       taskId,
       finalSubtask.id,
       "leader",
-      buildLeaderPrompt(task, planResult.text, draftResult.text, reviewResult.text)
+      buildLeaderPrompt(task, planResult.text, writerSubmission.draft_text, reviewDecision)
     );
     updateSubtask(taskId, finalSubtask.id, {
       outputText: finalResult.text,

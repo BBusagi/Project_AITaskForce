@@ -120,6 +120,8 @@ function addSubtask(taskId, data) {
     inputText: data.inputText,
     outputText: data.outputText ?? null,
     reviewComment: data.reviewComment ?? null,
+    writerSubmission: data.writerSubmission ?? null,
+    reviewDecision: data.reviewDecision ?? null,
     modelInvocation: data.modelInvocation ?? null,
     status: data.status,
     sequence: state.subtasks.get(taskId).length + 1,
