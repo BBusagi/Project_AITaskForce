@@ -1,15 +1,30 @@
 const { providers } = require("./config");
 
 const ollamaBaseUrl = providers.ollama.baseUrl;
+const ollamaRequestTimeoutMs = providers.ollama.requestTimeoutMs;
 
 async function postJson(path, body) {
-  const response = await fetch(`${ollamaBaseUrl}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ollamaRequestTimeoutMs);
+  let response;
+
+  try {
+    response = await fetch(`${ollamaBaseUrl}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error(`Ollama request timed out after ${ollamaRequestTimeoutMs}ms: ${path}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     const errorText = await response.text();

@@ -7,6 +7,7 @@ module.exports = {
     ollama: {
       label: "Ollama Local",
       baseUrl: "http://127.0.0.1:11434",
+      requestTimeoutMs: 180000,
       models: ["qwen3:8b"],
     },
     openai: {

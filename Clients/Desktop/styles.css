@@ -988,6 +988,50 @@ h3 {
   display: none;
 }
 
+.subtask-invocation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 12px 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.subtask-invocation span {
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.invocation-status {
+  color: var(--text);
+}
+
+.invocation-status.is-running {
+  border-color: rgba(88, 210, 255, 0.36);
+  background: rgba(88, 210, 255, 0.1);
+}
+
+.invocation-status.is-completed {
+  border-color: rgba(141, 231, 168, 0.32);
+  background: rgba(141, 231, 168, 0.1);
+}
+
+.invocation-status.is-timeout,
+.invocation-status.is-failed {
+  border-color: rgba(255, 111, 111, 0.36);
+  background: rgba(255, 111, 111, 0.1);
+}
+
+.subtask-error {
+  margin: -2px 12px 10px;
+  color: #ffd4d4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .subtask-output pre {
   max-height: 240px;
   padding: 0 12px 12px;

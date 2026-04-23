@@ -120,6 +120,7 @@ function addSubtask(taskId, data) {
     inputText: data.inputText,
     outputText: data.outputText ?? null,
     reviewComment: data.reviewComment ?? null,
+    modelInvocation: data.modelInvocation ?? null,
     status: data.status,
     sequence: state.subtasks.get(taskId).length + 1,
     createdAt: nowIso(),
@@ -127,6 +128,15 @@ function addSubtask(taskId, data) {
   };
 
   state.subtasks.get(taskId).push(subtask);
+  return subtask;
+}
+
+function updateSubtask(taskId, subtaskId, patch) {
+  const subtasks = state.subtasks.get(taskId) || [];
+  const subtask = subtasks.find((item) => item.id === subtaskId);
+  if (!subtask) return null;
+
+  Object.assign(subtask, patch, { updatedAt: nowIso() });
   return subtask;
 }
 
@@ -224,6 +234,7 @@ module.exports = {
   createTask,
   updateTask,
   addSubtask,
+  updateSubtask,
   addEvent,
   addMessage,
   getTask,

@@ -2,12 +2,16 @@ const {
   createTask,
   updateTask,
   addSubtask,
+  updateSubtask,
   addEvent,
   addMessage,
   getTask,
   state,
 } = require("./store");
 const { generate, resolveRoute } = require("./model-gateway");
+const { providers } = require("./config");
+
+const MAX_REVIEW_ATTEMPTS = 3;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -16,18 +20,6 @@ function sleep(ms) {
 function summarizeTitle(text) {
   const clean = text.trim();
   return clean.length > 72 ? `${clean.slice(0, 72)}...` : clean;
-}
-
-async function generateOrFallback(role, prompt, fallback) {
-  try {
-    return await generate(role, prompt);
-  } catch {
-    return {
-      provider: "mock",
-      model: "fallback",
-      text: fallback,
-    };
-  }
 }
 
 function describeRoute(role) {
@@ -52,6 +44,127 @@ function textLength(value) {
   return String(value || "").length;
 }
 
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function getRouteTimeoutMs(route) {
+  if (route?.provider === "ollama") return providers.ollama.requestTimeoutMs;
+  return null;
+}
+
+function buildRunningInvocation(route, startedAt, timeoutMs) {
+  return {
+    status: "running",
+    provider: route.provider,
+    model: route.model,
+    route: `${route.provider}:${route.model}`,
+    startedAt,
+    completedAt: null,
+    durationMs: null,
+    timeoutMs,
+    textChars: null,
+    errorMessage: null,
+  };
+}
+
+async function generateRequired(taskId, role, prompt) {
+  const route = resolveRoute(role);
+  const startedAtMs = Date.now();
+  const startedAt = nowIso();
+  const timeoutMs = getRouteTimeoutMs(route);
+
+  console.log(`MODEL REQUEST START role=${role} provider=${route.provider} model=${route.model} timeoutMs=${timeoutMs ?? "none"}`);
+
+  try {
+    const result = await generate(role, prompt);
+    const durationMs = Date.now() - startedAtMs;
+
+    if (!String(result.text || "").trim()) {
+      throw new Error(`Model returned empty response for role=${role}`);
+    }
+
+    console.log(
+      `MODEL REQUEST DONE role=${role} provider=${result.provider} model=${result.model} durationMs=${durationMs} textChars=${textLength(result.text)}`
+    );
+
+    return {
+      ...result,
+      invocation: {
+        status: "completed",
+        provider: result.provider,
+        model: result.model,
+        route: `${result.provider}:${result.model}`,
+        startedAt,
+        completedAt: nowIso(),
+        durationMs,
+        timeoutMs,
+        textChars: textLength(result.text),
+        errorMessage: null,
+      },
+    };
+  } catch (error) {
+    const durationMs = Date.now() - startedAtMs;
+    const timedOut = /timed out|abort/i.test(error.message);
+    const status = timedOut ? "timeout" : "failed";
+
+    console.error(
+      `MODEL REQUEST ${timedOut ? "TIMEOUT" : "ERROR"} role=${role} provider=${route.provider} model=${route.model} durationMs=${durationMs} error=${JSON.stringify(compactLogText(error.message))}`
+    );
+    logTaskEvent(taskId, "model_error", "Model generation failed.", {
+      role,
+      route: describeRoute(role),
+      status,
+      durationMs,
+      error: error.message,
+    });
+    error.modelInvocation = {
+      status,
+      provider: route.provider,
+      model: route.model,
+      route: `${route.provider}:${route.model}`,
+      startedAt,
+      completedAt: nowIso(),
+      durationMs,
+      timeoutMs,
+      textChars: null,
+      errorMessage: error.message,
+    };
+    throw error;
+  }
+}
+
+async function runModelForSubtask(taskId, subtaskId, role, prompt) {
+  const route = resolveRoute(role);
+  const startedAt = nowIso();
+  const timeoutMs = getRouteTimeoutMs(route);
+
+  updateSubtask(taskId, subtaskId, {
+    status: "running",
+    modelInvocation: buildRunningInvocation(route, startedAt, timeoutMs),
+  });
+
+  try {
+    const result = await generateRequired(taskId, role, prompt);
+    updateSubtask(taskId, subtaskId, {
+      modelInvocation: result.invocation,
+    });
+    return result;
+  } catch (error) {
+    updateSubtask(taskId, subtaskId, {
+      status: "failed",
+      modelInvocation:
+        error.modelInvocation || {
+          ...buildRunningInvocation(route, startedAt, timeoutMs),
+          status: "failed",
+          completedAt: nowIso(),
+          errorMessage: error.message,
+        },
+    });
+    throw error;
+  }
+}
+
 function buildPlannerPrompt(task) {
   return [
     "You are the Planner agent in AI Task Force.",
@@ -66,13 +179,20 @@ function buildPlannerPrompt(task) {
 function buildWriterPrompt(task, planText) {
   return [
     "You are the Writer agent in AI Task Force.",
-    "Write a concise first draft based on the plan.",
-    "Do not include hidden reasoning.",
+    "Produce the actual user-requested deliverable.",
+    "Do not summarize the task metadata.",
+    "Do not write placeholder bullets such as task focus, proposed output, backend route, or workflow status.",
+    "Use the original user input as the source content and the Planner output as execution guidance.",
+    "If the user requested summarization, translation, rewriting, formatting, or multi-language output, perform that work directly.",
+    "Respect every requested language, heading, structure, and output format.",
+    "Return only the draft content that should be reviewed.",
+    "Do not include hidden reasoning or thinking tags.",
     "",
     `Task title: ${task.title}`,
-    `User input: ${task.userInput}`,
+    "Original user input:",
+    task.userInput,
     "",
-    "Plan:",
+    "Planner output:",
     planText,
   ].join("\n");
 }
@@ -98,6 +218,32 @@ function buildReviewerPrompt(task, planText, draftText) {
     "",
     "Writer draft:",
     draftText,
+  ].join("\n");
+}
+
+function buildWriterRevisionPrompt(task, planText, previousDraft, reviewText, attemptNumber) {
+  return [
+    "You are the Writer agent in AI Task Force.",
+    "Revise the previous draft using the Reviewer feedback.",
+    "Produce the corrected user-facing deliverable only.",
+    "Do not explain the revision process.",
+    "Do not include hidden reasoning or thinking tags.",
+    "Respect every requested language, heading, structure, and output format.",
+    "",
+    `Task title: ${task.title}`,
+    `Revision attempt: ${attemptNumber}`,
+    "",
+    "Original user input:",
+    task.userInput,
+    "",
+    "Planner output:",
+    planText,
+    "",
+    "Previous Writer draft:",
+    previousDraft,
+    "",
+    "Reviewer feedback to address:",
+    reviewText,
   ].join("\n");
 }
 
@@ -169,22 +315,14 @@ async function runTask(taskId) {
       route: describeRoute("planner"),
     });
 
-    const planResult = await generateOrFallback(
-      "planner",
-      buildPlannerPrompt(task),
-      [
-        "Objective: deliver a structured first-pass answer.",
-        "Constraints: keep the workflow deterministic and easy to inspect.",
-        "Output format: concise structured text.",
-        "Execution steps: planning -> drafting -> review -> final response.",
-        "Assigned roles: planner, writer, reviewer, leader.",
-      ].join("\n")
-    );
-
-    addSubtask(taskId, {
+    const planSubtask = addSubtask(taskId, {
       type: "plan",
       assignedAgentId: "planner",
       inputText: task.userInput,
+      status: "running",
+    });
+    const planResult = await runModelForSubtask(taskId, planSubtask.id, "planner", buildPlannerPrompt(task));
+    updateSubtask(taskId, planSubtask.id, {
       outputText: planResult.text,
       status: "completed",
     });
@@ -193,6 +331,7 @@ async function runTask(taskId) {
       actorId: "planner",
       eventType: "planning_completed",
       message: "Planner completed the structured task plan.",
+      subtaskId: planSubtask.id,
       metadata: {
         provider: planResult.provider,
         model: planResult.model,
@@ -206,120 +345,141 @@ async function runTask(taskId) {
 
     await sleep(500);
 
-    updateTask(taskId, { status: "writing", stageOwnerId: "writer" });
-    addEvent(taskId, {
-      actorType: "system",
-      actorId: "writer",
-      eventType: "writing_started",
-      message: "Writer started the first draft.",
-    });
-    addLifecycleMessage(taskId, "leader", `Writer is generating the first draft through route ${describeRoute("writer")}.`);
-    logTaskEvent(taskId, "writer_started", "Writer received task and started draft.", {
-      route: describeRoute("writer"),
-    });
+    let draftResult = null;
+    let reviewResult = null;
+    let reviewPassed = false;
 
-    const draftResult = await generateOrFallback(
-      "writer",
-      buildWriterPrompt(task, planResult.text),
-      [
-        "Draft:",
-        `- Task focus: ${task.title}`,
-        "- Proposed output: concise structured answer",
-        "- Current backend route: local Ollama writer with in-memory orchestration",
-      ].join("\n")
-    );
+    for (let attempt = 1; attempt <= MAX_REVIEW_ATTEMPTS; attempt += 1) {
+      const isRevision = attempt > 1;
 
-    const draftSubtask = addSubtask(taskId, {
-      type: "draft",
-      assignedAgentId: "writer",
-      inputText: planResult.text,
-      outputText: draftResult.text,
-      status: "completed",
-    });
-    addEvent(taskId, {
-      actorType: "agent",
-      actorId: "writer",
-      eventType: "writing_completed",
-      message: "Writer completed the first draft.",
-      subtaskId: draftSubtask.id,
-      metadata: {
+      updateTask(taskId, { status: isRevision ? "revising" : "writing", stageOwnerId: "writer" });
+      addEvent(taskId, {
+        actorType: "system",
+        actorId: "writer",
+        eventType: isRevision ? "revision_started" : "writing_started",
+        message: isRevision ? `Writer started revision attempt ${attempt}.` : "Writer started the first draft.",
+      });
+      addLifecycleMessage(
+        taskId,
+        "leader",
+        isRevision
+          ? `Writer is revising attempt ${attempt} using Reviewer feedback through route ${describeRoute("writer")}.`
+          : `Writer is generating the first draft through route ${describeRoute("writer")}.`
+      );
+      logTaskEvent(taskId, isRevision ? "writer_revision_started" : "writer_started", isRevision ? "Writer received reviewer feedback and started revision." : "Writer received task and started draft.", {
+        attempt,
+        route: describeRoute("writer"),
+      });
+
+      const draftSubtask = addSubtask(taskId, {
+        type: isRevision ? "revise" : "draft",
+        assignedAgentId: "writer",
+        inputText: isRevision ? reviewResult.text : planResult.text,
+        status: "running",
+      });
+      const writerPrompt = isRevision
+        ? buildWriterRevisionPrompt(task, planResult.text, draftResult.text, reviewResult.text, attempt)
+        : buildWriterPrompt(task, planResult.text);
+      draftResult = await runModelForSubtask(taskId, draftSubtask.id, "writer", writerPrompt);
+      updateSubtask(taskId, draftSubtask.id, {
+        outputText: draftResult.text,
+        status: "completed",
+      });
+      addEvent(taskId, {
+        actorType: "agent",
+        actorId: "writer",
+        eventType: isRevision ? "revision_completed" : "writing_completed",
+        message: isRevision ? `Writer completed revision attempt ${attempt}.` : "Writer completed the first draft.",
+        subtaskId: draftSubtask.id,
+        metadata: {
+          attempt,
+          provider: draftResult.provider,
+          model: draftResult.model,
+        },
+      });
+      logTaskEvent(taskId, isRevision ? "writer_revision_completed" : "writer_completed", isRevision ? "Writer completed revision." : "Writer completed draft.", {
+        attempt,
         provider: draftResult.provider,
         model: draftResult.model,
-      },
-    });
-    logTaskEvent(taskId, "writer_completed", "Writer completed draft.", {
-      provider: draftResult.provider,
-      model: draftResult.model,
-      outputChars: textLength(draftResult.text),
-    });
+        outputChars: textLength(draftResult.text),
+      });
 
-    await sleep(500);
+      await sleep(500);
 
-    updateTask(taskId, { status: "reviewing", stageOwnerId: "reviewer" });
-    addEvent(taskId, {
-      actorType: "system",
-      actorId: "reviewer",
-      eventType: "review_started",
-      message: "Reviewer started the quality check.",
-    });
-    addLifecycleMessage(taskId, "leader", `Reviewer is checking the draft through route ${describeRoute("reviewer")}.`);
-    logTaskEvent(taskId, "reviewer_started", "Reviewer started quality check.", {
-      route: describeRoute("reviewer"),
-    });
+      updateTask(taskId, { status: "reviewing", stageOwnerId: "reviewer" });
+      addEvent(taskId, {
+        actorType: "system",
+        actorId: "reviewer",
+        eventType: "review_started",
+        message: `Reviewer started quality check attempt ${attempt}.`,
+      });
+      addLifecycleMessage(taskId, "leader", `Reviewer is checking attempt ${attempt} through route ${describeRoute("reviewer")}.`);
+      logTaskEvent(taskId, "reviewer_started", "Reviewer started quality check.", {
+        attempt,
+        route: describeRoute("reviewer"),
+      });
 
-    const reviewResult = await generateOrFallback(
-      "reviewer",
-      buildReviewerPrompt(task, planResult.text, draftResult.text),
-      [
-        "result: pass",
-        "issues found: none blocking",
-        "revision guidance: keep the response concise and structured",
-        "rationale: the draft follows the requested ATF workflow",
-      ].join("\n")
-    );
+      const reviewSubtask = addSubtask(taskId, {
+        type: "review",
+        assignedAgentId: "reviewer",
+        inputText: draftResult.text,
+        status: "running",
+      });
+      reviewResult = await runModelForSubtask(taskId, reviewSubtask.id, "reviewer", buildReviewerPrompt(task, planResult.text, draftResult.text));
 
-    const passed = /\bresult:\s*pass\b/i.test(reviewResult.text) && !/\bresult:\s*fail\b/i.test(reviewResult.text);
-    const reviewSubtask = addSubtask(taskId, {
-      type: "review",
-      assignedAgentId: "reviewer",
-      inputText: draftResult.text,
-      outputText: reviewResult.text,
-      status: passed ? "completed" : "rejected",
-      reviewComment: passed ? null : reviewResult.text,
-    });
+      reviewPassed = /\bresult:\s*pass\b/i.test(reviewResult.text) && !/\bresult:\s*fail\b/i.test(reviewResult.text);
+      updateSubtask(taskId, reviewSubtask.id, {
+        outputText: reviewResult.text,
+        status: reviewPassed ? "completed" : "rejected",
+        reviewComment: reviewPassed ? null : reviewResult.text,
+      });
 
-    addEvent(taskId, {
-      actorType: "agent",
-      actorId: "reviewer",
-      eventType: passed ? "review_passed" : "review_failed",
-      message: passed ? "Reviewer approved the draft." : "Reviewer rejected the draft.",
-      subtaskId: reviewSubtask.id,
-      metadata: {
+      addEvent(taskId, {
+        actorType: "agent",
+        actorId: "reviewer",
+        eventType: reviewPassed ? "review_passed" : "review_failed",
+        message: reviewPassed ? `Reviewer approved attempt ${attempt}.` : `Reviewer rejected attempt ${attempt}.`,
+        subtaskId: reviewSubtask.id,
+        metadata: {
+          attempt,
+          provider: reviewResult.provider,
+          model: reviewResult.model,
+        },
+      });
+      logTaskEvent(taskId, reviewPassed ? "reviewer_passed" : "reviewer_failed", reviewPassed ? "Reviewer approved draft." : "Reviewer rejected draft.", {
+        attempt,
         provider: reviewResult.provider,
         model: reviewResult.model,
-      },
-    });
-    logTaskEvent(taskId, passed ? "reviewer_passed" : "reviewer_failed", passed ? "Reviewer approved draft." : "Reviewer rejected draft.", {
-      provider: reviewResult.provider,
-      model: reviewResult.model,
-      outputChars: textLength(reviewResult.text),
-    });
+        outputChars: textLength(reviewResult.text),
+      });
 
-    if (!passed) {
+      if (reviewPassed) break;
+      if (attempt < MAX_REVIEW_ATTEMPTS) {
+        addLifecycleMessage(taskId, "leader", `Reviewer rejected attempt ${attempt}. Feedback has been returned to Writer for revision.`);
+        logTaskEvent(taskId, "revision_requested", "Reviewer feedback returned to Writer.", {
+          nextAttempt: attempt + 1,
+          reviewChars: textLength(reviewResult.text),
+        });
+        await sleep(500);
+      }
+    }
+
+    if (!reviewPassed) {
       updateTask(taskId, {
         status: "failed",
         stageOwnerId: "leader",
-        errorMessage: "Review failed in the current MVP flow.",
+        errorMessage: `Review failed after ${MAX_REVIEW_ATTEMPTS} attempts.`,
       });
       addEvent(taskId, {
         actorType: "system",
         actorId: "leader",
         eventType: "task_failed",
-        message: "Task stopped after review failure.",
+        message: `Task stopped after ${MAX_REVIEW_ATTEMPTS} failed review attempts.`,
       });
-      addLifecycleMessage(taskId, "leader", "The workflow stopped after review failure. Retry support can be added next.");
-      logTaskEvent(taskId, "task_failed", "Task stopped after review failure.", {
-        reviewerOutput: reviewResult.text,
+      addLifecycleMessage(taskId, "leader", `The workflow stopped after ${MAX_REVIEW_ATTEMPTS} failed review attempts.`);
+      logTaskEvent(taskId, "task_failed", "Task stopped after max review attempts.", {
+        attempts: MAX_REVIEW_ATTEMPTS,
+        reviewChars: textLength(reviewResult?.text),
       });
       return;
     }
@@ -329,11 +489,22 @@ async function runTask(taskId) {
       route: describeRoute("leader"),
     });
 
-    const finalResult = await generateOrFallback(
+    const finalSubtask = addSubtask(taskId, {
+      type: "summary",
+      assignedAgentId: "leader",
+      inputText: reviewResult.text,
+      status: "running",
+    });
+    const finalResult = await runModelForSubtask(
+      taskId,
+      finalSubtask.id,
       "leader",
-      buildLeaderPrompt(task, planResult.text, draftResult.text, reviewResult.text),
-      buildFinalOutput(task, planResult.text, draftResult.text, reviewResult.text)
+      buildLeaderPrompt(task, planResult.text, draftResult.text, reviewResult.text)
     );
+    updateSubtask(taskId, finalSubtask.id, {
+      outputText: finalResult.text,
+      status: "completed",
+    });
 
     updateTask(taskId, {
       status: "completed",
@@ -346,6 +517,7 @@ async function runTask(taskId) {
       actorId: "leader",
       eventType: "final_output_ready",
       message: "Leader synthesized the final output.",
+      subtaskId: finalSubtask.id,
       metadata: {
         provider: finalResult.provider,
         model: finalResult.model,

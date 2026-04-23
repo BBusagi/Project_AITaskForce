@@ -96,6 +96,7 @@ const providers = {
     id: "ollama",
     label: pick(providerConfig.ollama?.label, "Ollama Local"),
     baseUrl: pick(process.env.OLLAMA_BASE_URL, providerConfig.ollama?.baseUrl, legacyOllama.baseUrl, "http://127.0.0.1:11434"),
+    requestTimeoutMs: readNumber(process.env.OLLAMA_REQUEST_TIMEOUT_MS, readNumber(providerConfig.ollama?.requestTimeoutMs, 180000)),
     models: normalizeModels(providerConfig.ollama?.models, [defaultWriterModel]),
   },
   openai: {

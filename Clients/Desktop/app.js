@@ -1,4 +1,4 @@
-const phases = ["pending", "planning", "writing", "reviewing", "completed"];
+const phases = ["pending", "planning", "writing", "reviewing", "revising", "completed"];
 const ROUTABLE_AGENT_IDS = new Set(["leader", "planner", "writer", "reviewer"]);
 
 const THEME_STORAGE_KEY = "atf-desktop-theme";
@@ -148,6 +148,7 @@ const dictionaries = {
       planning: "Planning",
       writing: "Writing",
       reviewing: "Reviewing",
+      revising: "Revising",
       completed: "Completed",
     },
     events: {
@@ -155,6 +156,8 @@ const dictionaries = {
       planning_started: "Planning Started",
       writing_started: "Writing Started",
       review_started: "Review Started",
+      revision_started: "Revision Started",
+      revision_completed: "Revision Completed",
       final_output_ready: "Final Output Ready",
     },
     stage: {
@@ -182,6 +185,15 @@ const dictionaries = {
       finalOutput: "Final Output",
       intermediateOutputs: "Intermediate Outputs",
       outputPending: "Output will appear here after Leader completes final synthesis.",
+      modelRequest: "Model Request",
+      requestRunning: "Running",
+      requestCompleted: "Completed",
+      requestTimeout: "Timeout",
+      requestFailed: "Failed",
+      requestUnknown: "Unknown",
+      duration: "Duration",
+      responseSize: "Response",
+      timeout: "Timeout",
       model: "Model",
       modelRoute: "Model Route",
       llmFilters: "LLM Filters",
@@ -304,6 +316,7 @@ const dictionaries = {
       planning: "Planner is turning the confirmed request into execution steps, constraints, and agent handoffs.",
       writing: "Writer is producing the requested draft or transformation from the planner output.",
       reviewing: "Reviewer is checking completeness, clarity, consistency, and instruction adherence.",
+      revising: "Writer is applying Reviewer feedback before the next quality check.",
       completed: "The current task is complete and ready for inspection.",
     },
     notes: {
@@ -435,6 +448,7 @@ const dictionaries = {
       planning: "规划中",
       writing: "生成中",
       reviewing: "审核中",
+      revising: "修订中",
       completed: "已完成",
     },
     events: {
@@ -442,6 +456,8 @@ const dictionaries = {
       planning_started: "开始规划",
       writing_started: "开始生成",
       review_started: "开始审核",
+      revision_started: "开始修订",
+      revision_completed: "修订完成",
       final_output_ready: "最终输出已完成",
     },
     stage: {
@@ -469,6 +485,15 @@ const dictionaries = {
       finalOutput: "最终输出",
       intermediateOutputs: "中间输出",
       outputPending: "Leader 完成最终整合后，输出结果会显示在这里。",
+      modelRequest: "模型请求",
+      requestRunning: "运行中",
+      requestCompleted: "已完成",
+      requestTimeout: "已超时",
+      requestFailed: "失败",
+      requestUnknown: "未知",
+      duration: "耗时",
+      responseSize: "响应",
+      timeout: "超时",
       model: "模型",
       modelRoute: "模型路由",
       connected: "Ollama 已连接",
@@ -582,6 +607,7 @@ const dictionaries = {
       planning: "Planner 正在把已确认需求拆解为执行步骤、约束和 agent 分工。",
       writing: "Writer 正在根据规划输出生成本次任务需要的内容。",
       reviewing: "Reviewer 正在检查完整性、清晰度、一致性和指令遵循情况。",
+      revising: "Writer 正在根据 Reviewer 的反馈修订输出，然后进入下一轮审核。",
       completed: "当前任务已完成，可以查看最终输出。",
     },
     notes: {
@@ -942,12 +968,41 @@ function formatTimestamp(value) {
   return formatTime(new Date(value));
 }
 
+function formatDurationMs(value) {
+  const ms = Number(value);
+  if (!Number.isFinite(ms) || ms < 0) return "--";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
+}
+
+function getInvocationDuration(invocation) {
+  if (!invocation) return null;
+  if (Number.isFinite(Number(invocation.durationMs))) return Number(invocation.durationMs);
+  if (invocation.startedAt && invocation.status === "running") {
+    const startedAt = new Date(invocation.startedAt).getTime();
+    if (Number.isFinite(startedAt)) return Date.now() - startedAt;
+  }
+  return null;
+}
+
+function formatInvocationStatus(status) {
+  const map = {
+    running: "stage.requestRunning",
+    completed: "stage.requestCompleted",
+    timeout: "stage.requestTimeout",
+    failed: "stage.requestFailed",
+  };
+  return t(map[status] || "stage.requestUnknown");
+}
+
 function taskProgressByStatus(status) {
   const map = {
     pending: 8,
     planning: 32,
     writing: 68,
     reviewing: 86,
+    revising: 78,
     completed: 100,
     failed: 100,
   };
@@ -956,6 +1011,7 @@ function taskProgressByStatus(status) {
 
 function normalizeTaskPhase(status) {
   if (status === "failed") return "reviewing";
+  if (status === "revising") return "revising";
   if (phases.includes(status)) return status;
   return "pending";
 }
@@ -2346,6 +2402,37 @@ function renderAgentDetailContent(agentId) {
   `;
 }
 
+function renderModelInvocation(invocation) {
+  if (!invocation) {
+    return `
+      <div class="subtask-invocation">
+        <span class="invocation-status is-unknown">${escapeHtml(t("stage.requestUnknown"))}</span>
+      </div>
+    `;
+  }
+
+  const status = invocation.status || "unknown";
+  const duration = getInvocationDuration(invocation);
+  const timeout = invocation.timeoutMs ? formatDurationMs(invocation.timeoutMs) : "--";
+  const responseSize = Number.isFinite(Number(invocation.textChars)) ? `${invocation.textChars} chars` : "--";
+  const route = [invocation.provider, invocation.model].filter(Boolean).join(" / ") || invocation.route || "--";
+
+  return `
+    <div class="subtask-invocation">
+      <span class="invocation-status is-${escapeHtml(status)}">${escapeHtml(formatInvocationStatus(status))}</span>
+      <span>${escapeHtml(t("stage.modelRequest"))}: ${escapeHtml(route)}</span>
+      <span>${escapeHtml(t("stage.duration"))}: ${escapeHtml(formatDurationMs(duration))}</span>
+      <span>${escapeHtml(t("stage.timeout"))}: ${escapeHtml(timeout)}</span>
+      <span>${escapeHtml(t("stage.responseSize"))}: ${escapeHtml(responseSize)}</span>
+    </div>
+    ${
+      invocation.errorMessage
+        ? `<p class="subtask-error">${escapeHtml(invocation.errorMessage)}</p>`
+        : ""
+    }
+  `;
+}
+
 function renderTaskOverviewContent() {
   const finalOutput = state.currentTask.finalOutput;
   const errorMessage = state.currentTask.errorMessage;
@@ -2387,17 +2474,6 @@ function renderTaskOverviewContent() {
         </div>
       </div>
 
-      <div class="info-block output-block">
-        <p class="eyebrow">${escapeHtml(t("stage.finalOutput"))}</p>
-        ${
-          errorMessage
-            ? `<pre class="output-text is-error" data-output-scroll-key="final">${escapeHtml(errorMessage)}</pre>`
-            : finalOutput
-              ? `<pre class="output-text" data-output-scroll-key="final">${escapeHtml(finalOutput)}</pre>`
-              : `<p>${escapeHtml(t("stage.outputPending"))}</p>`
-        }
-      </div>
-
       <div class="info-block">
         <p class="eyebrow">${escapeHtml(t("stage.intermediateOutputs"))}</p>
         ${
@@ -2412,6 +2488,7 @@ function renderTaskOverviewContent() {
                           <span>${escapeHtml(roleLabel(subtask.assignedAgentId))} / ${escapeHtml(subtask.type)}</span>
                           <span>${escapeHtml(subtask.status)}</span>
                         </summary>
+                        ${renderModelInvocation(subtask.modelInvocation)}
                         <pre data-output-scroll-key="${escapeHtml(subtask.id)}">${escapeHtml(subtask.outputText || subtask.reviewComment || "No output yet.")}</pre>
                       </details>
                     `
@@ -2420,6 +2497,17 @@ function renderTaskOverviewContent() {
               </div>
             `
             : `<p>${escapeHtml(t("stage.outputPending"))}</p>`
+        }
+      </div>
+
+      <div class="info-block output-block">
+        <p class="eyebrow">${escapeHtml(t("stage.finalOutput"))}</p>
+        ${
+          errorMessage
+            ? `<pre class="output-text is-error" data-output-scroll-key="final">${escapeHtml(errorMessage)}</pre>`
+            : finalOutput
+              ? `<pre class="output-text" data-output-scroll-key="final">${escapeHtml(finalOutput)}</pre>`
+              : `<p>${escapeHtml(t("stage.outputPending"))}</p>`
         }
       </div>
     </div>
