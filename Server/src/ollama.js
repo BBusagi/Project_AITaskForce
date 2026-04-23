@@ -65,27 +65,43 @@ async function generate(model, prompt) {
   };
 }
 
-function flattenMessages(messages) {
-  return messages
-    .map((message) => {
-      const role = message.role || "user";
-      const content = message.content || "";
-      return `${role.toUpperCase()}:\n${content}`;
-    })
-    .join("\n\n");
+function normalizeChatMessages(messages, instruction) {
+  const chatMessages = [
+    {
+      role: "system",
+      content: instruction,
+    },
+  ];
+
+  for (const message of messages) {
+    const content = (message.content || "").trim();
+    if (!content) continue;
+
+    chatMessages.push({
+      role: message.role === "assistant" ? "assistant" : "user",
+      content,
+    });
+  }
+
+  return chatMessages;
 }
 
 async function generateConversation(model, messages, instruction) {
-  const prompt = [
-    instruction,
-    "",
-    "Conversation history:",
-    flattenMessages(messages),
-    "",
-    "Respond with the next assistant message only.",
-  ].join("\n");
+  const payload = {
+    model,
+    messages: normalizeChatMessages(messages, instruction),
+    stream: false,
+    options: {
+      temperature: 0.2,
+    },
+  };
 
-  return generate(model, prompt);
+  const result = await postJson("/api/chat", payload);
+  return {
+    provider: "ollama",
+    model,
+    text: (result.message?.content || result.response || "").trim(),
+  };
 }
 
 module.exports = {

@@ -77,6 +77,12 @@ function toInputMessage(message) {
   };
 }
 
+function messagesToTranscript(messages) {
+  return messages
+    .map((message) => `${message.role === "assistant" ? "Assistant" : "User"}: ${message.content}`)
+    .join("\n\n");
+}
+
 async function generate(model, prompt) {
   const result = await openaiRequest("/responses", {
     method: "POST",
@@ -108,13 +114,8 @@ async function generateConversation(model, messages, instruction) {
     method: "POST",
     body: JSON.stringify({
       model,
-      input: [
-        toInputMessage({
-          role: "developer",
-          content: instruction,
-        }),
-        ...messages.map(toInputMessage),
-      ],
+      instructions: instruction,
+      input: `${messagesToTranscript(messages)}\n\nAssistant:`,
     }),
   });
 

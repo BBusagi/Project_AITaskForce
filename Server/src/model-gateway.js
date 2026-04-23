@@ -21,7 +21,7 @@ const currentRoutes = Object.fromEntries(
     return [roleId, buildRoute(route.provider, route.model)];
   })
 );
-const enabledRouteIds = new Set([DEFAULT_ROUTE_ID]);
+const enabledRouteIds = new Set([DEFAULT_ROUTE_ID, ...Object.values(currentRoutes).map((route) => route.id)]);
 
 const providerOrder = ["openai", "anthropic", "ollama"];
 
@@ -291,9 +291,16 @@ async function generate(role, prompt) {
   throw new Error(`Unsupported provider route: ${route.provider}`);
 }
 
-function buildConversationInstruction(role) {
+function getRouteProviderLabel(route) {
+  return getProviderLabel(route.provider);
+}
+
+function buildConversationInstruction(role, route) {
   return [
-    `You are the ${role} agent in AI Task Force.`,
+    `You are the ${role} agent in AI Task Force, a product role for this workspace.`,
+    `Your current runtime route is ${getRouteProviderLabel(route)} using model ${route.model}.`,
+    "Keep your product role and runtime model identity separate: when identity, model, provider, runtime, or capability questions come up in any language, answer with both the AI Task Force agent role and the current provider/model route.",
+    "Do not claim billing, quota, API, or provider failures unless the current request actually failed and the application surfaced that error.",
     "Reply as a helpful teammate in a direct chat thread.",
     "Keep responses concise, practical, and grounded in the current conversation.",
   ].join(" ");
@@ -301,7 +308,7 @@ function buildConversationInstruction(role) {
 
 async function generateConversation(role, messages) {
   const route = resolveRoute(role);
-  const instruction = buildConversationInstruction(role);
+  const instruction = buildConversationInstruction(role, route);
 
   if (route.provider === "ollama") {
     return generateOllamaConversation(route.model, messages, instruction);

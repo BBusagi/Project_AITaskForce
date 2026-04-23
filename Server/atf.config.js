@@ -34,8 +34,8 @@ module.exports = {
         model: "gpt-5.4-2026-03-05",
       },
       writer: {
-        provider: "openai",
-        model: "gpt-5.4-2026-03-05",
+        provider: "ollama",
+        model: "qwen3:8b",
       },
       reviewer: {
         provider: "openai",

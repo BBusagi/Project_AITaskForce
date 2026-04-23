@@ -487,6 +487,11 @@ h3 {
   border-color: rgba(141, 231, 168, 0.26);
 }
 
+.connection-chip.is-compact {
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
 .model-select-group {
   display: inline-flex;
   align-items: center;
@@ -650,6 +655,19 @@ h3 {
   background: rgba(88, 210, 255, 0.08);
 }
 
+.message-card.is-error {
+  border-color: rgba(255, 111, 111, 0.42);
+  background: rgba(255, 111, 111, 0.08);
+}
+
+.message-route {
+  margin: -2px 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .agent-card {
   display: flex;
   gap: 14px;
@@ -701,6 +719,67 @@ h3 {
 .agent-card-body {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.agent-model-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.agent-model-pill,
+.agent-model-name {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.agent-model-name {
+  max-width: 260px;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-model-detail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.agent-model-fact {
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.agent-model-fact span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.agent-model-fact strong {
+  display: block;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .message-head,

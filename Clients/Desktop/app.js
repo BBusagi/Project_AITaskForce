@@ -1059,6 +1059,7 @@ function createAgentConversation(agentId) {
         sender: agentId,
         time: formatTime(),
         text: buildAgentGreeting(agentId),
+        isLocal: true,
       },
     ],
   };
@@ -1075,7 +1076,7 @@ function openAgentConversation(agentId) {
   renderApp();
 }
 
-function appendConversationMessage(conversationId, sender, text) {
+function appendConversationMessage(conversationId, sender, text, metadata = {}) {
   const conversation = getConversationById(conversationId);
   if (!conversation) return;
 
@@ -1084,20 +1085,19 @@ function appendConversationMessage(conversationId, sender, text) {
     sender,
     time: formatTime(),
     text,
+    ...metadata,
   });
   conversation.updatedAt = Date.now();
 }
 
-function buildAgentReply(agentId, text) {
-  const status = formatStatus(getAgentById(agentId)?.status || "idle");
-  return `${roleLabel(agentId)} acknowledged: ${text}\n\nCurrent status: ${status}.\nCurrent task: ${getAgentTaskText(getAgentById(agentId))}.`;
-}
-
 async function requestAgentReply(conversation) {
-  const messages = conversation.messages.map((message) => ({
-    role: message.sender === "user" ? "user" : "assistant",
-    content: resolveMessageText(message),
-  }));
+  const messages = conversation.messages
+    .filter((message) => !message.isLocal && !message.isError)
+    .map((message) => ({
+      role: message.sender === "user" ? "user" : "assistant",
+      content: resolveMessageText(message),
+    }))
+    .filter((message) => message.content.trim().length > 0);
 
   const result = await apiFetch("/chat", {
     method: "POST",
@@ -1107,7 +1107,21 @@ async function requestAgentReply(conversation) {
     }),
   });
 
-  return result.text || "";
+  return result;
+}
+
+function formatModelRequestError(error) {
+  const message = error?.message || String(error);
+  const jsonMatch = message.match(/\{.*\}$/);
+
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return parsed.error || message;
+    } catch {}
+  }
+
+  return message;
 }
 
 async function sendConversationMessage(conversationId, text) {
@@ -1120,17 +1134,37 @@ async function sendConversationMessage(conversationId, text) {
   try {
     await refreshBackendAvailability();
     if (state.connection.backendAvailable) {
-      const replyText = await requestAgentReply(conversation);
-      appendConversationMessage(conversationId, conversation.agentId, replyText || buildAgentReply(conversation.agentId, text));
+      const reply = await requestAgentReply(conversation);
+      appendConversationMessage(
+        conversationId,
+        conversation.agentId,
+        reply.text || "Model returned an empty response.",
+        {
+          provider: reply.provider,
+          model: reply.model,
+        }
+      );
       renderApp();
       return;
     }
-  } catch {}
-
-  window.setTimeout(() => {
-    appendConversationMessage(conversationId, conversation.agentId, buildAgentReply(conversation.agentId, text));
+  } catch (error) {
+    appendConversationMessage(
+      conversationId,
+      conversation.agentId,
+      `Model request failed: ${formatModelRequestError(error)}`,
+      { isError: true }
+    );
     renderApp();
-  }, 420);
+    return;
+  }
+
+  appendConversationMessage(
+    conversationId,
+    conversation.agentId,
+    "Model request failed: backend is unavailable. Restart the ATF server and try again.",
+    { isError: true }
+  );
+  renderApp();
 }
 
 function getProjectName(record) {
@@ -1491,6 +1525,78 @@ function getProviderStatusMeta(agentId) {
     className: "connection-chip is-connected",
     label: `${providerLabel} Ready`,
   };
+}
+
+function getAgentModelSummary(agentId) {
+  if (!supportsRuntimeModel(agentId)) {
+    return {
+      providerLabel: "Stub",
+      modelName: "No runtime model",
+      routeId: "not-connected",
+      enabledLabel: "Future",
+      statusMeta: {
+        className: "connection-chip",
+        label: "Stub",
+      },
+    };
+  }
+
+  const route = getAgentConfiguredRoute(agentId);
+  if (!route) {
+    return {
+      providerLabel: "Missing",
+      modelName: "No model selected",
+      routeId: "missing",
+      enabledLabel: t("stage.disabled"),
+      statusMeta: getProviderStatusMeta(agentId),
+    };
+  }
+
+  const providerState = state.connection.providers[route.provider];
+  return {
+    providerLabel: providerState?.label || PROVIDER_LABELS[route.provider] || route.provider,
+    modelName: route.model,
+    routeId: route.id,
+    enabledLabel: isRouteEnabled(route.id) ? t("stage.enabled") : t("stage.disabled"),
+    statusMeta: getProviderStatusMeta(agentId),
+  };
+}
+
+function renderAgentModelStrip(agentId) {
+  const model = getAgentModelSummary(agentId);
+
+  return `
+    <div class="agent-model-strip" aria-label="${escapeHtml(t("stage.modelRoute"))}">
+      <span class="agent-model-pill">${escapeHtml(model.providerLabel)}</span>
+      <span class="agent-model-name">${escapeHtml(model.modelName)}</span>
+      <span class="${model.statusMeta.className} is-compact">${escapeHtml(model.statusMeta.label)}</span>
+    </div>
+  `;
+}
+
+function renderAgentModelDetail(agentId) {
+  const model = getAgentModelSummary(agentId);
+
+  return `
+    <div class="agent-model-detail">
+      <div class="agent-model-fact">
+        <span>${escapeHtml(t("stage.model"))}</span>
+        <strong>${escapeHtml(model.modelName)}</strong>
+      </div>
+      <div class="agent-model-fact">
+        <span>Provider</span>
+        <strong>${escapeHtml(model.providerLabel)}</strong>
+      </div>
+      <div class="agent-model-fact">
+        <span>Route</span>
+        <strong>${escapeHtml(model.routeId)}</strong>
+      </div>
+      <div class="agent-model-fact">
+        <span>${escapeHtml(t("stage.enabled"))}</span>
+        <strong>${escapeHtml(model.enabledLabel)}</strong>
+      </div>
+    </div>
+  `;
 }
 
 function renderAgentModelControls(agentId) {
@@ -1889,12 +1995,17 @@ function renderChatMessages(messages) {
       ${messages
         .map((message) => {
           const isSelf = message.sender === "user";
+          const routeLabel =
+            !isSelf && message.provider && message.model
+              ? `${PROVIDER_LABELS[message.provider] || message.provider} · ${message.model}`
+              : "";
           return `
-            <article class="message-card ${isSelf ? "self" : "peer"}">
+            <article class="message-card ${isSelf ? "self" : "peer"} ${message.isError ? "is-error" : ""}">
               <div class="message-head">
                 <span>${escapeHtml(roleLabel(message.sender))}</span>
                 <span>${escapeHtml(message.time)}</span>
               </div>
+              ${routeLabel ? `<div class="message-route">${escapeHtml(routeLabel)}</div>` : ""}
               <div class="message-body">${escapeHtml(resolveMessageText(message))}</div>
             </article>
           `;
@@ -2080,6 +2191,7 @@ function renderTeamOverviewContent() {
                     ${escapeHtml(t("buttons.openChat"))}
                   </button>
                 </div>
+                ${renderAgentModelStrip(agent.id)}
                 <p>${escapeHtml(roleDuty(agent.id))}</p>
                 <p>${escapeHtml(getAgentTaskText(agent))}</p>
                 <div class="skill-list">
@@ -2112,6 +2224,12 @@ function renderAgentDetailContent(agentId) {
           </button>
         </div>
         <p>${escapeHtml(roleDuty(agent.id))}</p>
+      </div>
+
+      <div class="info-block">
+        <p class="eyebrow">${escapeHtml(t("stage.modelRoute"))}</p>
+        ${renderAgentModelStrip(agent.id)}
+        ${renderAgentModelDetail(agent.id)}
       </div>
 
       <div class="info-block">

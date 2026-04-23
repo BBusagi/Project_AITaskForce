@@ -11,7 +11,15 @@ const {
   buildAgentsView,
   buildSnapshot,
 } = require("./store");
-const { buildRouteId, getProviderHealth, getRuntimeCatalog, setRoleRoute, setRouteEnabled, generateConversation } = require("./model-gateway");
+const {
+  buildRouteId,
+  getProviderHealth,
+  getRuntimeCatalog,
+  resolveRoute,
+  setRoleRoute,
+  setRouteEnabled,
+  generateConversation,
+} = require("./model-gateway");
 
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {
@@ -47,6 +55,11 @@ function toTaskSummary(task) {
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
   };
+}
+
+function compactLogText(value, maxLength = 360) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -151,8 +164,28 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const result = await generateConversation(body.role, normalizedMessages);
-      sendJson(res, 200, result);
+      const route = resolveRoute(body.role);
+      const latestUserMessage = [...normalizedMessages].reverse().find((message) => message.role === "user");
+      console.log(
+        `CHAT REQUEST role=${body.role} provider=${route.provider} model=${route.model} user=${JSON.stringify(compactLogText(latestUserMessage?.content))}`
+      );
+
+      try {
+        const result = await generateConversation(body.role, normalizedMessages);
+        console.log(
+          `CHAT RESPONSE role=${body.role} provider=${result.provider} model=${result.model} text=${JSON.stringify(compactLogText(result.text))}`
+        );
+        sendJson(res, 200, result);
+      } catch (error) {
+        console.error(
+          `CHAT ERROR role=${body.role} provider=${route.provider} model=${route.model} error=${JSON.stringify(compactLogText(error.message))}`
+        );
+        sendJson(res, 500, {
+          error: error.message,
+          provider: route.provider,
+          model: route.model,
+        });
+      }
       return;
     }
 
