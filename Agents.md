@@ -361,10 +361,26 @@ Current Desktop shell expectations:
 
 Should contain:
 
-- leader thread
-- task compose surface
-- quick progress questions
-- direct agent chat sessions created from Team
+- `Check-ins` for lightweight status questions and progress inspection
+- direct agent chat sessions created from Team, including Leader
+- Leader direct chat with two explicit actions: normal `Send Message` and task-oriented `Task Creation`
+- a publication confirmation card after the user uses `Task Creation`
+
+Main tasks must originate from the Leader direct chat through the explicit `Task Creation` action, not from a standalone compose form and not from ordinary chat messages.
+
+Expected task publication flow:
+
+```text
+User opens Leader from Team
+-> Leader appears under Direct Chats like other agents
+-> User can use Send Message for natural conversation
+-> User uses Task Creation for task requirements
+-> UI generates a task draft and publication confirmation card
+-> User confirms publication
+-> System publishes the main task
+-> Leader mentions Planner
+-> Planner breaks the task into subtasks and assigns specialist agents
+```
 
 #### Team
 

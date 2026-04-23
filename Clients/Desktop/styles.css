@@ -668,6 +668,41 @@ h3 {
   color: var(--muted);
 }
 
+.publish-card {
+  display: grid;
+  gap: 12px;
+  width: min(78%, 720px);
+  justify-self: start;
+  padding: 16px;
+  border: 1px solid rgba(255, 150, 85, 0.32);
+  border-radius: 12px;
+  background: rgba(255, 150, 85, 0.08);
+}
+
+.publish-card h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.publish-scope {
+  max-height: 110px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.12);
+  color: var(--text);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.publish-milestones {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .agent-card {
   display: flex;
   gap: 14px;

@@ -296,14 +296,25 @@ function getRouteProviderLabel(route) {
 }
 
 function buildConversationInstruction(role, route) {
-  return [
+  const baseInstruction = [
     `You are the ${role} agent in AI Task Force, a product role for this workspace.`,
     `Your current runtime route is ${getRouteProviderLabel(route)} using model ${route.model}.`,
     "Keep your product role and runtime model identity separate: when identity, model, provider, runtime, or capability questions come up in any language, answer with both the AI Task Force agent role and the current provider/model route.",
     "Do not claim billing, quota, API, or provider failures unless the current request actually failed and the application surfaced that error.",
     "Reply as a helpful teammate in a direct chat thread.",
     "Keep responses concise, practical, and grounded in the current conversation.",
-  ].join(" ");
+    "If the user corrects, narrows, or replaces an earlier request, treat the latest correction as authoritative and discard conflicting earlier assumptions.",
+  ];
+
+  if (role === "leader") {
+    baseInstruction.push(
+      "The application separates normal conversation from task creation with an explicit Task Creation button.",
+      "In normal Leader chat, answer conversationally and help the user clarify scope when they ask.",
+      "Do not claim that a task has been published unless the application explicitly confirms publication."
+    );
+  }
+
+  return baseInstruction.join(" ");
 }
 
 async function generateConversation(role, messages) {

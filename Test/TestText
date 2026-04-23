@@ -1,0 +1,17 @@
+在当前的 AI Task Force プロジェクト中，我们正在从一个 simple chat interface 转向一个更复杂的 AI workspace system。
+现在的重点是 building a multi-agent workflow，其中 Leader 会负责 task orchestration，而 Planner, Writer, Reviewer 则分别承担不同的职责。
+
+目前 Desktop client は基本的な shell structure（left navigation, middle sidebar, right workspace）已经完成，但是在 UI consistency と interaction design の部分 still needs improvement。
+另外，Web client 还是 static prototype の段階で、还没有接入真实的 backend API。
+
+在 backend 侧，我们已经成功接入了 OpenAI GPT API 以及本地的 Qwen model，通过一个简单的 orchestrator 实现了
+Leader → Planner → Writer → Reviewer → Final 的基本流程，但是在 error handling と retry mechanism の设计上还不够完善。
+
+Next step としては、we plan to:
+
+refine the task state machine（pending / planning / writing / reviewing / completed）
+improve Chat History の可视化，使 agent interactions がより理解しやすくなる
+add lightweight mobile access，让用户可以通过 smartphone 进行 quick status check と simple command input
+
+最终目标は、not just building another AI chatbot，而是实现一个
+“AI Execution System” where tasks are not only generated, but actually executed and traceable.

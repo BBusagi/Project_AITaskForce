@@ -90,8 +90,7 @@ const dictionaries = {
     entries: {
       thread: "Leader Thread",
       checkins: "Check-ins",
-      compose: "Compose",
-      directChats: "Direct Chats",
+      directChats: "Chats",
       overview: "Overview",
       stages: "Stage Flow",
       timeline: "Timeline",
@@ -234,12 +233,18 @@ const dictionaries = {
       askStatus: "Ask Status",
       openChat: "Open Chat",
       sendMessage: "Send Message",
+      taskCreation: "Task Creation",
+      confirmPublish: "Confirm Publish",
+      continueNegotiation: "Continue Negotiation",
     },
     chatPanel: {
+      leaderThreadIntro: "Requirement negotiation",
       leaderIntro: "Leader conversation",
       directIntro: "Direct conversation",
       inputLabel: "Message",
-      inputPlaceholder: "Send a message to this workspace...",
+      inputPlaceholder: "Discuss scope, missing details, and acceptance boundaries with Leader...",
+      publishReady: "Task publication review",
+      publishReadyNote: "Leader has prepared a task draft. Confirm to publish it into the workflow.",
       noDirectChats: "No direct agent chats yet. Open one from the Team workspace.",
     },
     placeholder:
@@ -385,8 +390,7 @@ const dictionaries = {
     entries: {
       thread: "Leader 会话",
       checkins: "进度检查",
-      compose: "发布任务",
-      directChats: "直接会话",
+      directChats: "会话",
       overview: "概览",
       stages: "阶段流转",
       timeline: "时间线",
@@ -518,12 +522,18 @@ const dictionaries = {
       askStatus: "询问状态",
       openChat: "打开会话",
       sendMessage: "发送消息",
+      taskCreation: "任务创建",
+      confirmPublish: "确认发布",
+      continueNegotiation: "继续协商",
     },
     chatPanel: {
+      leaderThreadIntro: "需求协商",
       leaderIntro: "Leader 会话",
       directIntro: "直接会话",
       inputLabel: "消息内容",
-      inputPlaceholder: "向当前对象发送一条消息...",
+      inputPlaceholder: "和 Leader 协商范围、不明确点和验收边界...",
+      publishReady: "任务发布确认",
+      publishReadyNote: "Leader 已经准备好任务草案。确认后会正式发布到工作流。",
       noDirectChats: "还没有 agent 直接会话，请先从 Team 工作区创建。",
     },
     placeholder:
@@ -623,7 +633,7 @@ const dictionaries = {
 const state = {
   activeWorkspace: "chat",
   activeEntry: {
-    chat: "thread",
+    chat: "checkins",
     team: "overview",
     task: "overview",
     projects: "portfolio",
@@ -1090,24 +1100,33 @@ function appendConversationMessage(conversationId, sender, text, metadata = {}) 
   conversation.updatedAt = Date.now();
 }
 
-async function requestAgentReply(conversation) {
-  const messages = conversation.messages
+function buildModelContextMessages(messages) {
+  return messages
     .filter((message) => !message.isLocal && !message.isError)
     .map((message) => ({
       role: message.sender === "user" ? "user" : "assistant",
       content: resolveMessageText(message),
     }))
-    .filter((message) => message.content.trim().length > 0);
+    .filter((message) => message.content.trim().length > 0)
+    .slice(-10);
+}
+
+async function requestRoleReply(role, messages) {
+  const modelMessages = buildModelContextMessages(messages);
 
   const result = await apiFetch("/chat", {
     method: "POST",
     body: JSON.stringify({
-      role: conversation.agentId,
-      messages,
+      role,
+      messages: modelMessages,
     }),
   });
 
   return result;
+}
+
+async function requestAgentReply(conversation) {
+  return requestRoleReply(conversation.agentId, conversation.messages);
 }
 
 function formatModelRequestError(error) {
@@ -1122,6 +1141,80 @@ function formatModelRequestError(error) {
   }
 
   return message;
+}
+
+function buildLeaderTaskDraft(taskInput) {
+  const normalizedInput = taskInput.trim();
+  const latestInput = normalizedInput || getCurrentTaskTitle();
+  const title = latestInput.length > 48 ? `${latestInput.slice(0, 48)}...` : latestInput;
+
+  return {
+    title,
+    input: normalizedInput || latestInput,
+    milestones: [
+      "Planner defines objective, constraints, and output format.",
+      "Planner assigns the required specialist agents.",
+      "Writer produces the requested draft or transformation.",
+      "Reviewer checks completeness, clarity, and instruction adherence.",
+      "Leader delivers the final response after review.",
+    ],
+  };
+}
+
+function formatLeaderTaskDraft(draft) {
+  return [
+    `Task draft: ${draft.title}`,
+    "",
+    "Scope:",
+    draft.input,
+    "",
+    "Milestones:",
+    ...draft.milestones.map((milestone, index) => `${index + 1}. ${milestone}`),
+  ].join("\n");
+}
+
+function createLeaderTaskDraft(conversationId, taskInput) {
+  const conversation = getConversationById(conversationId);
+  if (!conversation || conversation.agentId !== "leader") return;
+
+  const draft = buildLeaderTaskDraft(taskInput);
+  appendConversationMessage(conversationId, "user", taskInput, { taskIntent: true });
+  conversation.taskCreation = {
+    status: "awaiting_publish_confirmation",
+    draft,
+  };
+  appendConversationMessage(conversationId, "leader", `${formatLeaderTaskDraft(draft)}\n\nPlease review the publication card below and confirm to publish.`);
+  renderApp();
+}
+
+function publishLeaderTaskDraft(conversationId) {
+  const conversation = getConversationById(conversationId);
+  const draft = conversation?.taskCreation?.draft;
+  if (!conversation || !draft) return;
+
+  conversation.taskCreation = {
+    status: "published",
+    draft: null,
+  };
+  appendConversationMessage(
+    conversationId,
+    "leader",
+    `Task published.\n\n${formatLeaderTaskDraft(draft)}\n\nPlanner is now responsible for subtask breakdown and agent assignment.`
+  );
+  void runTaskLifecycle(draft.input);
+  renderApp();
+}
+
+function cancelLeaderTaskDraft(conversationId) {
+  const conversation = getConversationById(conversationId);
+  if (!conversation) return;
+
+  conversation.taskCreation = {
+    status: "paused",
+    draft: null,
+  };
+  appendConversationMessage(conversationId, "leader", "Task publication paused. Continue the natural conversation or use Task Creation again.");
+  renderApp();
 }
 
 async function sendConversationMessage(conversationId, text) {
@@ -1265,15 +1358,11 @@ function buildWorkspaceMeta() {
       groups: [
         {
           label: t("groups.threads"),
-          items: [
-            { id: "thread", label: t("entries.thread"), meta: t("meta.live") },
-            { id: "checkins", label: t("entries.checkins"), meta: t("meta.count2") },
-          ],
+          items: [{ id: "checkins", label: t("entries.checkins"), meta: t("meta.count2") }],
         },
         {
-          label: t("groups.actions"),
+          label: t("entries.directChats"),
           items: [
-            { id: "compose", label: t("entries.compose"), meta: t("meta.plus") },
             ...[...state.chatConversations]
               .sort((left, right) => right.updatedAt - left.updatedAt)
               .map((conversation) => ({
@@ -1432,12 +1521,13 @@ function setActiveEntry(entryId) {
   syncRuntimeModelsForActiveAgent();
 }
 
-function pushMessage(sender, text) {
+function pushMessage(sender, text, metadata = {}) {
   state.messages.push({
     id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     sender,
     time: formatTime(),
     text,
+    ...metadata,
   });
 }
 
@@ -2015,7 +2105,7 @@ function renderChatMessages(messages) {
   `;
 }
 
-function renderChatComposer(formId, textareaId, placeholder, submitLabel, conversationId = "") {
+function renderChatComposer(formId, textareaId, placeholder, submitLabel, conversationId = "", options = {}) {
   return `
     <div class="chat-thread-composer">
       <form id="${escapeHtml(formId)}" class="chat-form" ${conversationId ? `data-chat-conversation-form="${escapeHtml(conversationId)}"` : ""}>
@@ -2029,40 +2119,39 @@ function renderChatComposer(formId, textareaId, placeholder, submitLabel, conver
         ></textarea>
         <div class="chat-actions">
           <button type="submit" class="btn-primary">${escapeHtml(submitLabel)}</button>
+          ${
+            options.showTaskCreation
+              ? `<button type="submit" class="btn-secondary" data-task-creation-submit>${escapeHtml(t("buttons.taskCreation"))}</button>`
+              : ""
+          }
         </div>
       </form>
     </div>
   `;
 }
 
-function renderThreadContent() {
-  return `
-    <div class="chat-thread-layout">
-      <div class="chat-thread-header">
-        <div>
-          <p class="eyebrow">${escapeHtml(t("chatPanel.leaderIntro"))}</p>
-          <h3>${escapeHtml(t("entries.thread"))}</h3>
-        </div>
-        <div class="phase-strip">
-          ${phases
-            .map((phase) => {
-              const phaseIndex = phases.indexOf(phase);
-              const currentIndex = phases.indexOf(state.currentTask.phase);
-              const className =
-                phaseIndex < currentIndex
-                  ? "phase-chip done"
-                  : phaseIndex === currentIndex
-                    ? "phase-chip active"
-                    : "phase-chip";
-              return `<span class="${className}">${escapeHtml(formatPhase(phase))}</span>`;
-            })
-            .join("")}
-        </div>
-      </div>
+function renderLeaderPublishConfirmation(conversation) {
+  const draft = conversation?.taskCreation?.draft;
+  if (!draft || conversation?.taskCreation?.status !== "awaiting_publish_confirmation") return "";
 
-      ${renderChatMessages(state.messages)}
-      ${renderChatComposer("leader-thread-form", "leader-thread-input", t("chatPanel.inputPlaceholder"), t("buttons.sendMessage"))}
-    </div>
+  return `
+    <section class="publish-card">
+      <div>
+        <p class="eyebrow">${escapeHtml(t("chatPanel.publishReady"))}</p>
+        <h3>${escapeHtml(draft.title)}</h3>
+        <p>${escapeHtml(t("chatPanel.publishReadyNote"))}</p>
+      </div>
+      <div class="publish-scope">
+        <span>${escapeHtml(draft.input)}</span>
+      </div>
+      <div class="publish-milestones">
+        ${draft.milestones.map((milestone, index) => `<span>${index + 1}. ${escapeHtml(milestone)}</span>`).join("")}
+      </div>
+      <div class="chat-actions">
+        <button class="btn-primary" type="button" data-confirm-leader-publish="${escapeHtml(conversation.id)}">${escapeHtml(t("buttons.confirmPublish"))}</button>
+        <button class="btn-secondary" type="button" data-cancel-leader-publish="${escapeHtml(conversation.id)}">${escapeHtml(t("buttons.continueNegotiation"))}</button>
+      </div>
+    </section>
   `;
 }
 
@@ -2091,47 +2180,15 @@ function renderDirectChatContent(conversationId) {
       </div>
 
       ${renderChatMessages(conversation.messages)}
+      ${conversation.agentId === "leader" ? renderLeaderPublishConfirmation(conversation) : ""}
       ${renderChatComposer(
         `agent-chat-form-${escapeHtml(conversation.agentId)}`,
         `agent-chat-input-${escapeHtml(conversation.agentId)}`,
         t("chatPanel.inputPlaceholder"),
         t("buttons.sendMessage"),
-        conversation.id
+        conversation.id,
+        { showTaskCreation: conversation.agentId === "leader" }
       )}
-    </div>
-  `;
-}
-
-function renderComposeContent() {
-  return `
-    <div class="stage-layout">
-      <div class="info-block">
-        <p class="eyebrow">${escapeHtml(t("stage.quickActions"))}</p>
-        <div class="quick-actions">
-          <button class="quick-btn" type="button" data-prompt="status">${escapeHtml(t("buttons.askProgress"))}</button>
-          <button class="quick-btn" type="button" data-prompt="handoff">${escapeHtml(t("buttons.askOwner"))}</button>
-          <button class="quick-btn" type="button" data-prompt="demo">${escapeHtml(t("buttons.loadDemo"))}</button>
-        </div>
-      </div>
-
-      <div class="info-block">
-        <p class="eyebrow">${escapeHtml(t("stage.compose"))}</p>
-        <h3>${escapeHtml(t("stage.sendToLeader"))}</h3>
-        <form id="chat-form" class="chat-form">
-          <label for="chat-input">${escapeHtml(t("stage.taskContent"))}</label>
-          <textarea
-            id="chat-input"
-            name="chat"
-            rows="5"
-            placeholder="${escapeHtml(t("placeholder"))}"
-            required
-          ></textarea>
-          <div class="chat-actions">
-            <button type="submit" class="btn-primary">${escapeHtml(t("buttons.publishTask"))}</button>
-            <button type="button" id="ask-status" class="btn-secondary">${escapeHtml(t("buttons.askStatus"))}</button>
-          </div>
-        </form>
-      </div>
     </div>
   `;
 }
@@ -2790,9 +2847,7 @@ function renderStageContentBody() {
   const workspace = state.activeWorkspace;
   const entry = getActiveEntryId();
 
-  if (workspace === "chat" && entry === "thread") return renderThreadContent();
   if (workspace === "chat" && isAgentChatEntry(entry)) return renderDirectChatContent(entry);
-  if (workspace === "chat" && entry === "compose") return renderComposeContent();
   if (workspace === "chat" && entry === "checkins") return renderCheckinsContent();
   if (workspace === "team" && entry === "overview") return renderTeamOverviewContent();
   if (workspace === "team") return renderAgentDetailContent(entry);
@@ -3007,9 +3062,6 @@ async function runTaskLifecycle(userInput) {
 }
 
 function bindStageActions() {
-  const chatForm = document.getElementById("chat-form");
-  const chatInput = document.getElementById("chat-input");
-  const askStatusBtn = document.getElementById("ask-status");
   const quickButtons = [...document.querySelectorAll(".quick-btn")];
   const treeItems = [...document.querySelectorAll(".tree-item")];
   const themeButtons = [...document.querySelectorAll("[data-theme-option]")];
@@ -3019,8 +3071,8 @@ function bindStageActions() {
   const routeToggles = [...document.querySelectorAll("[data-route-toggle]")];
   const agentChatButtons = [...document.querySelectorAll("[data-open-agent-chat]")];
   const directChatForms = [...document.querySelectorAll("[data-chat-conversation-form]")];
-  const leaderThreadForm = document.getElementById("leader-thread-form");
-  const leaderThreadInput = document.getElementById("leader-thread-input");
+  const confirmLeaderPublishButtons = [...document.querySelectorAll("[data-confirm-leader-publish]")];
+  const cancelLeaderPublishButtons = [...document.querySelectorAll("[data-cancel-leader-publish]")];
 
   treeItems.forEach((button) => {
     button.addEventListener("click", () => {
@@ -3028,33 +3080,13 @@ function bindStageActions() {
     });
   });
 
-  if (chatForm && chatInput) {
-    chatForm.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const value = chatInput.value.trim();
-      if (!value) return;
+  confirmLeaderPublishButtons.forEach((button) => {
+    button.addEventListener("click", () => publishLeaderTaskDraft(button.dataset.confirmLeaderPublish));
+  });
 
-      pushMessage("user", value);
-      void runTaskLifecycle(value);
-      chatInput.value = "";
-    });
-  }
-
-  if (leaderThreadForm && leaderThreadInput) {
-    leaderThreadForm.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const value = leaderThreadInput.value.trim();
-      if (!value) return;
-
-      pushMessage("user", value);
-      void runTaskLifecycle(value);
-      leaderThreadInput.value = "";
-    });
-  }
-
-  if (askStatusBtn) {
-    askStatusBtn.addEventListener("click", handleStatusQuestion);
-  }
+  cancelLeaderPublishButtons.forEach((button) => {
+    button.addEventListener("click", () => cancelLeaderTaskDraft(button.dataset.cancelLeaderPublish));
+  });
 
   agentChatButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -3073,7 +3105,12 @@ function bindStageActions() {
 
       if (!conversationId || !value) return;
 
-      sendConversationMessage(conversationId, value);
+      const conversation = getConversationById(conversationId);
+      if (event.submitter?.dataset.taskCreationSubmit != null && conversation?.agentId === "leader") {
+        createLeaderTaskDraft(conversationId, value);
+      } else {
+        sendConversationMessage(conversationId, value);
+      }
       textarea.value = "";
     });
   });
@@ -3094,11 +3131,12 @@ function bindStageActions() {
 
       if (type === "demo") {
         state.activeWorkspace = "chat";
-        state.activeEntry.chat = "compose";
+        const conversation = createAgentConversation("leader");
+        state.activeEntry.chat = conversation.id;
         state.sidebarCollapsed = false;
         renderApp();
 
-        const input = document.getElementById("chat-input");
+        const input = document.getElementById("agent-chat-input-leader");
         if (input) {
           input.value = t("demo.demoPrompt");
         }
