@@ -1,5 +1,14 @@
 const phases = ["pending", "planning", "writing", "reviewing", "revising", "human_confirmation", "completed"];
 const ROUTABLE_AGENT_IDS = new Set(["leader", "planner", "writer", "reviewer"]);
+const PHASE_START_EVENTS = {
+  task_created: "pending",
+  planning_started: "planning",
+  writing_started: "writing",
+  revision_started: "revising",
+  review_started: "reviewing",
+  human_confirmation_required: "human_confirmation",
+  final_output_ready: "completed",
+};
 
 const THEME_STORAGE_KEY = "atf-desktop-theme";
 const LANGUAGE_STORAGE_KEY = "atf-desktop-language";
@@ -154,13 +163,20 @@ const dictionaries = {
     },
     events: {
       task_created: "Task Created",
+      task_started: "Task Started",
+      retry_started: "Retry Started",
       planning_started: "Planning Started",
+      planning_completed: "Planning Completed",
       writing_started: "Writing Started",
+      writing_completed: "Writing Completed",
       review_started: "Review Started",
+      review_passed: "Review Passed",
+      review_failed: "Review Failed",
       revision_started: "Revision Started",
       revision_completed: "Revision Completed",
       human_confirmation_required: "Human Confirmation Required",
       final_output_ready: "Final Output Ready",
+      task_failed: "Task Failed",
     },
     stage: {
       stageSummary: "Stage Summary",
@@ -254,6 +270,9 @@ const dictionaries = {
       confirmPublish: "Confirm Publish",
       continueNegotiation: "Continue Negotiation",
       retryTask: "Retry Task",
+      retryFailedStep: "Retry Failed Step",
+      archiveTask: "Archive",
+      deleteTask: "Delete",
     },
     chatPanel: {
       leaderThreadIntro: "Requirement negotiation",
@@ -549,6 +568,9 @@ const dictionaries = {
       confirmPublish: "确认发布",
       continueNegotiation: "继续协商",
       retryTask: "重新尝试任务",
+      retryFailedStep: "重试失败环节",
+      archiveTask: "归档",
+      deleteTask: "删除",
     },
     chatPanel: {
       leaderThreadIntro: "需求协商",
@@ -662,15 +684,18 @@ const state = {
   nextLocalTaskNumber: 1,
   currentTask: {
     id: "--",
+    status: "pending",
     titleKey: "agentTasks.noActiveTask",
     descriptionKey: "summary.empty",
     phase: "pending",
     owner: "leader",
     progress: 0,
     lastUpdate: "--",
+    updatedAt: null,
     finalOutput: null,
     errorMessage: null,
     subtasks: [],
+    events: [],
     isEmpty: true,
   },
   agents: [
@@ -935,7 +960,11 @@ function formatStatus(status) {
 }
 
 function formatEventType(type) {
-  return t(`events.${type}`);
+  const label = t(`events.${type}`);
+  if (label !== `events.${type}`) return label;
+  return String(type || "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function roleLabel(roleId) {
@@ -982,6 +1011,87 @@ function formatDurationMs(value) {
   if (ms < 1000) return `${Math.round(ms)}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
+}
+
+function normalizeEventType(event) {
+  return event.eventType || event.type;
+}
+
+function normalizeEventTime(event) {
+  return event.createdAt || event.timestamp || event.time;
+}
+
+function taskTimelineLabel(event) {
+  const title = event.taskTitle || event.taskId || getCurrentTaskTitle();
+  const id = event.taskId && title !== event.taskId ? ` · ${event.taskId}` : "";
+  return `${title}${id}`;
+}
+
+function buildStageFlowRows() {
+  const events = (state.currentTask.events || [])
+    .map((event) => ({
+      type: normalizeEventType(event),
+      time: new Date(normalizeEventTime(event)).getTime(),
+    }))
+    .filter((event) => event.type && Number.isFinite(event.time))
+    .sort((left, right) => left.time - right.time);
+  const rows = phases.map((phase) => ({
+    phase,
+    durationMs: 0,
+    startTime: null,
+    status: "pending",
+    isRunning: false,
+  }));
+  const rowByPhase = new Map(rows.map((row) => [row.phase, row]));
+  let activePhase = null;
+  let activeStart = null;
+
+  for (const event of events) {
+    const nextPhase = PHASE_START_EVENTS[event.type];
+    if (!nextPhase) continue;
+
+    if (activePhase && activeStart != null && event.time >= activeStart) {
+      rowByPhase.get(activePhase).durationMs += event.time - activeStart;
+    }
+
+    activePhase = nextPhase;
+    activeStart = event.time;
+    const row = rowByPhase.get(nextPhase);
+    row.startTime = row.startTime ?? event.time;
+  }
+
+  const currentStatus = state.currentTask.status || state.currentTask.phase;
+  const currentPhase = state.currentTask.phase;
+  const terminalStatuses = new Set(["completed", "failed"]);
+  if (activePhase && activeStart != null) {
+    const endTime =
+      terminalStatuses.has(currentStatus) && state.currentTask.updatedAt
+        ? new Date(state.currentTask.updatedAt).getTime()
+        : Date.now();
+    if (Number.isFinite(endTime) && endTime >= activeStart && activePhase !== "completed") {
+      rowByPhase.get(activePhase).durationMs += endTime - activeStart;
+    }
+  }
+
+  const currentIndex = phases.indexOf(currentPhase);
+  return rows.map((row, index) => {
+    if (currentStatus === "failed" && row.phase === currentPhase) {
+      return { ...row, status: "failed" };
+    }
+    if (currentStatus === "human_confirmation" && row.phase === "human_confirmation") {
+      return { ...row, status: "warning" };
+    }
+    if (currentStatus === "completed" && index <= currentIndex) {
+      return { ...row, status: "done" };
+    }
+    if (index < currentIndex) {
+      return { ...row, status: "done" };
+    }
+    if (row.phase === currentPhase && !terminalStatuses.has(currentStatus) && currentStatus !== "human_confirmation") {
+      return { ...row, status: "active", isRunning: true };
+    }
+    return row;
+  });
 }
 
 function getInvocationDuration(invocation) {
@@ -1032,6 +1142,29 @@ function getCurrentTaskTitle() {
 
 function getCurrentTaskDescription() {
   return state.currentTask.descriptionKey ? t(state.currentTask.descriptionKey) : state.currentTask.description;
+}
+
+function resetCurrentTaskView() {
+  state.connection.activeTaskId = null;
+  state.currentTask = {
+    id: "--",
+    status: "pending",
+    titleKey: "agentTasks.noActiveTask",
+    descriptionKey: "summary.empty",
+    phase: "pending",
+    owner: "leader",
+    progress: 0,
+    lastUpdate: "--",
+    updatedAt: null,
+    finalOutput: null,
+    errorMessage: null,
+    subtasks: [],
+    events: [],
+    isEmpty: true,
+  };
+  state.messages = [];
+  state.timeline = [];
+  state.activeEntry.task = "overview";
 }
 
 function getAgentById(id) {
@@ -1419,7 +1552,7 @@ function buildWorkspaceMeta() {
           label: t("groups.current"),
           items: [
             { id: "overview", label: t("entries.overview"), meta: t("meta.now") },
-            { id: "stages", label: t("entries.stages"), meta: t("meta.count5") },
+            { id: "stages", label: t("entries.stages"), meta: String(phases.length) },
             { id: "timeline", label: t("entries.timeline"), meta: t("meta.log") },
           ],
         },
@@ -1543,12 +1676,32 @@ function setActiveWorkspace(workspace) {
 
   renderApp();
   syncRuntimeModelsForActiveAgent();
+
+  if (workspace === "task") {
+    void Promise.all([refreshTaskList(), refreshTeamTimeline()]).then(() => {
+      renderApp();
+    });
+  }
 }
 
 function setActiveEntry(entryId) {
   state.activeEntry[state.activeWorkspace] = entryId;
   renderApp();
   syncRuntimeModelsForActiveAgent();
+
+  if (state.activeWorkspace === "task" && isTaskEntry(entryId)) {
+    void loadTaskSnapshot(entryId).catch((error) => {
+      console.error(error);
+      state.connection.backendAvailable = false;
+      renderApp();
+    });
+  }
+
+  if (state.activeWorkspace === "task" && entryId === "timeline") {
+    void refreshTeamTimeline().then(() => {
+      renderApp();
+    });
+  }
 }
 
 function pushMessage(sender, text, metadata = {}) {
@@ -1562,11 +1715,24 @@ function pushMessage(sender, text, metadata = {}) {
 }
 
 function pushTimeline(type, text) {
+  const createdAt = new Date().toISOString();
   state.timeline.push({
     type,
     time: formatTime(),
     text,
+    taskId: state.currentTask.id,
+    taskTitle: getCurrentTaskTitle(),
   });
+  state.currentTask.events = [
+    ...(state.currentTask.events || []),
+    {
+      eventType: type,
+      message: text,
+      createdAt,
+      taskId: state.currentTask.id,
+      taskTitle: getCurrentTaskTitle(),
+    },
+  ];
 }
 
 function upsertTaskSummary(task) {
@@ -1833,15 +1999,18 @@ function applyBackendSnapshot(snapshot) {
   upsertTaskSummary(task);
   state.currentTask = {
     id: task.id,
+    status: task.status,
     title: task.title,
     description: task.userInput,
     phase: normalizeTaskPhase(task.status),
     owner: task.stageOwnerId || "leader",
     progress: taskProgressByStatus(task.status),
     lastUpdate: formatTimestamp(task.updatedAt),
+    updatedAt: task.updatedAt,
     finalOutput: task.finalOutput || null,
     errorMessage: task.errorMessage || null,
     subtasks: snapshot.subtasks || [],
+    events: snapshot.events || [],
   };
 
   state.messages = snapshot.messages.map((message) => ({
@@ -1849,12 +2018,6 @@ function applyBackendSnapshot(snapshot) {
     sender: message.senderType === "user" ? "user" : "leader",
     time: formatTimestamp(message.createdAt),
     text: message.content,
-  }));
-
-  state.timeline = snapshot.events.map((event) => ({
-    type: event.eventType,
-    time: formatTimestamp(event.createdAt),
-    text: event.message,
   }));
 
   const backendAgents = new Map(snapshot.agents.map((agent) => [agent.id, agent]));
@@ -1875,11 +2038,22 @@ function applyBackendSnapshot(snapshot) {
 async function pollTaskSnapshot(taskId) {
   const snapshot = await apiFetch(`/tasks/${taskId}/snapshot`);
   applyBackendSnapshot(snapshot);
+  if (state.activeWorkspace === "task" && state.activeEntry.task === "timeline") {
+    await refreshTeamTimeline();
+  }
   renderApp();
 
   if (snapshot.task.status === "completed" || snapshot.task.status === "failed" || snapshot.task.status === "human_confirmation") {
     stopTaskPolling();
   }
+}
+
+async function loadTaskSnapshot(taskId) {
+  stopTaskPolling();
+  const snapshot = await apiFetch(`/tasks/${taskId}/snapshot`);
+  state.connection.activeTaskId = taskId;
+  applyBackendSnapshot(snapshot);
+  renderApp();
 }
 
 function activatePendingTask(result, description) {
@@ -1893,15 +2067,18 @@ function activatePendingTask(result, description) {
   });
   state.currentTask = {
     id: result.taskId,
+    status: result.status,
     title: taskTitle,
     description,
     phase: normalizeTaskPhase(result.status),
     owner: "leader",
     progress: taskProgressByStatus(result.status),
     lastUpdate: formatTime(),
+    updatedAt: new Date().toISOString(),
     finalOutput: null,
     errorMessage: null,
     subtasks: [],
+    events: [],
   };
   state.activeWorkspace = "task";
   state.activeEntry.task = result.taskId;
@@ -1945,6 +2122,40 @@ async function retryCurrentTask() {
   await watchTask(result.taskId);
 }
 
+async function retryCurrentFailedStep() {
+  if (!state.currentTask.id || state.currentTask.id === "--") return;
+
+  const result = await apiFetch(`/tasks/${state.currentTask.id}/retry-step`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  state.connection.activeTaskId = result.taskId;
+  await watchTask(result.taskId);
+}
+
+async function archiveCurrentTask() {
+  if (!state.currentTask.id || state.currentTask.id === "--") return;
+
+  await apiFetch(`/tasks/${state.currentTask.id}/archive`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  state.tasks = state.tasks.filter((task) => task.id !== state.currentTask.id);
+  resetCurrentTaskView();
+  renderApp();
+}
+
+async function deleteCurrentTask() {
+  if (!state.currentTask.id || state.currentTask.id === "--") return;
+
+  await apiFetch(`/tasks/${state.currentTask.id}`, {
+    method: "DELETE",
+  });
+  state.tasks = state.tasks.filter((task) => task.id !== state.currentTask.id);
+  resetCurrentTaskView();
+  renderApp();
+}
+
 async function refreshBackendAvailability() {
   try {
     await apiFetch("/health");
@@ -1982,6 +2193,42 @@ async function refreshBackendModels() {
     state.connection.allModels = [];
     state.connection.defaultRouteId = "openai::gpt-5.4-2026-03-05";
     state.connection.enabledRouteIds = [];
+  }
+}
+
+async function refreshTaskList() {
+  if (!state.connection.backendAvailable) return;
+
+  try {
+    const tasks = await apiFetch("/tasks");
+    state.tasks = (tasks || []).map((task) => ({
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      updatedAt: task.updatedAt || task.createdAt || new Date().toISOString(),
+    }));
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function refreshTeamTimeline() {
+  if (!state.connection.backendAvailable) return;
+
+  try {
+    const events = await apiFetch("/timeline");
+    state.timeline = (events || []).map((event) => ({
+      id: event.id,
+      type: event.eventType,
+      time: formatTimestamp(event.createdAt),
+      text: event.message,
+      taskId: event.taskId,
+      taskTitle: event.taskTitle,
+      taskNumber: event.taskNumber,
+      taskStatus: event.taskStatus,
+    }));
+  } catch (error) {
+    console.error(error);
   }
 }
 
@@ -2036,6 +2283,12 @@ async function syncRuntimeModels() {
   if (state.connection.backendAvailable) {
     await refreshBackendModels();
   }
+}
+
+async function syncBackendState() {
+  await syncRuntimeModels();
+  await refreshTaskList();
+  await refreshTeamTimeline();
 }
 
 function syncRuntimeModelsForActiveAgent() {
@@ -2465,8 +2718,15 @@ function renderTaskOverviewContent() {
   const finalOutput = state.currentTask.finalOutput;
   const errorMessage = state.currentTask.errorMessage;
   const subtasks = state.currentTask.subtasks || [];
-  const currentPhaseIndex = phases.indexOf(state.currentTask.phase);
-  const canRetryTask = ["reviewing", "human_confirmation"].includes(state.currentTask.phase) && Boolean(errorMessage);
+  const currentStatus = state.currentTask.status || state.currentTask.phase;
+  const canRetryTask =
+    !state.currentTask.isEmpty &&
+    state.currentTask.id !== "--" &&
+    (Boolean(errorMessage) || ["failed", "human_confirmation"].includes(currentStatus));
+  const canArchiveOrDeleteTask =
+    !state.currentTask.isEmpty &&
+    state.currentTask.id !== "--" &&
+    ["completed", "failed", "human_confirmation"].includes(currentStatus);
 
   return `
     <div class="stage-layout">
@@ -2480,38 +2740,37 @@ function renderTaskOverviewContent() {
           <span class="tag">${escapeHtml(state.currentTask.lastUpdate)}</span>
         </div>
         ${
-          canRetryTask
+          canRetryTask || canArchiveOrDeleteTask
             ? `
               <div class="agent-inline-actions">
-                <button class="btn-secondary" type="button" data-retry-task>
-                  ${escapeHtml(t("buttons.retryTask"))}
-                </button>
+                ${
+                  canRetryTask
+                    ? `
+                      <button class="btn-secondary" type="button" data-retry-task>
+                        ${escapeHtml(t("buttons.retryTask"))}
+                      </button>
+                      <button class="btn-secondary" type="button" data-retry-failed-step>
+                        ${escapeHtml(t("buttons.retryFailedStep"))}
+                      </button>
+                    `
+                    : ""
+                }
+                ${
+                  canArchiveOrDeleteTask
+                    ? `
+                      <button class="btn-secondary" type="button" data-archive-task>
+                        ${escapeHtml(t("buttons.archiveTask"))}
+                      </button>
+                      <button class="btn-secondary danger-btn" type="button" data-delete-task>
+                        ${escapeHtml(t("buttons.deleteTask"))}
+                      </button>
+                    `
+                    : ""
+                }
               </div>
             `
             : ""
         }
-      </div>
-
-      <div class="info-block">
-        <p class="eyebrow">${escapeHtml(t("stage.stageFlow"))}</p>
-        <div class="task-stage-map">
-          ${phases
-            .map((phase, index) => {
-              const className =
-                index < currentPhaseIndex
-                  ? "task-stage-node is-done"
-                  : index === currentPhaseIndex
-                    ? "task-stage-node is-active"
-                    : "task-stage-node";
-              return `
-                <div class="${className}">
-                  <span>${index + 1}</span>
-                  <strong>${escapeHtml(formatPhase(phase))}</strong>
-                </div>
-              `;
-            })
-            .join("")}
-        </div>
       </div>
 
       <div class="info-block">
@@ -2555,22 +2814,27 @@ function renderTaskOverviewContent() {
 }
 
 function renderStageFlowContent() {
+  const rows = buildStageFlowRows();
   return `
     <div class="stage-layout">
       <div class="info-block">
         <p class="eyebrow">${escapeHtml(t("stage.stageFlow"))}</p>
-        <div class="phase-strip">
-          ${phases
-            .map((phase) => {
-              const phaseIndex = phases.indexOf(phase);
-              const currentIndex = phases.indexOf(state.currentTask.phase);
-              const className =
-                phaseIndex < currentIndex
-                  ? "phase-chip done"
-                  : phaseIndex === currentIndex
-                    ? "phase-chip active"
-                    : "phase-chip";
-              return `<span class="${className}">${escapeHtml(formatPhase(phase))}</span>`;
+        <div class="task-stage-map is-detailed">
+          ${rows
+            .map((row, index) => {
+              const durationLabel = row.durationMs > 0 ? formatDurationMs(row.durationMs) : "--";
+              return `
+                <div class="task-stage-node is-${escapeHtml(row.status)}">
+                  <span>${index + 1}</span>
+                  <strong>${escapeHtml(formatPhase(row.phase))}</strong>
+                  <small>${escapeHtml(durationLabel)}${row.isRunning ? " +" : ""}</small>
+                  ${
+                    row.isRunning
+                      ? `<i class="stage-spinner" aria-label="${escapeHtml(t("stage.requestRunning"))}"></i>`
+                      : ""
+                  }
+                </div>
+              `;
             })
             .join("")}
         </div>
@@ -2587,19 +2851,24 @@ function renderTimelineContent() {
   return `
     <div class="timeline-list">
       <div class="timeline-list-inner">
-        ${state.timeline
-          .map(
-            (event) => `
-              <article class="timeline-item">
-                <div class="timeline-head">
-                  <span>${escapeHtml(formatEventType(event.type))}</span>
-                  <span>${escapeHtml(event.time)}</span>
-                </div>
-                <p>${escapeHtml(resolveTimelineText(event))}</p>
-              </article>
-            `
-          )
-          .join("")}
+        ${
+          state.timeline.length
+            ? state.timeline
+                .map(
+                  (event) => `
+                    <article class="timeline-item">
+                      <div class="timeline-head">
+                        <span>${escapeHtml(formatEventType(event.type))}</span>
+                        <span>${escapeHtml(event.time)}</span>
+                      </div>
+                      <div class="timeline-task">${escapeHtml(taskTimelineLabel(event))}</div>
+                      <p>${escapeHtml(resolveTimelineText(event))}</p>
+                    </article>
+                  `
+                )
+                .join("")
+            : `<p>${escapeHtml(t("stage.outputPending"))}</p>`
+        }
       </div>
     </div>
   `;
@@ -3200,15 +3469,18 @@ function runLocalTaskLifecycle(userInput) {
   state.nextLocalTaskNumber += 1;
   state.currentTask = {
     id: `task-${String(Math.floor(Math.random() * 900) + 100)}`,
+    status: "pending",
     title: localTaskTitle,
     description: userInput,
     phase: "pending",
     owner: "leader",
     progress: 8,
     lastUpdate: formatTime(),
+    updatedAt: new Date().toISOString(),
     finalOutput: null,
     errorMessage: null,
     subtasks: [],
+    events: [],
   };
   upsertTaskSummary({
     id: state.currentTask.id,
@@ -3230,9 +3502,11 @@ function runLocalTaskLifecycle(userInput) {
       delay: 1000,
       run() {
         state.currentTask.phase = "planning";
+        state.currentTask.status = "planning";
         state.currentTask.owner = "planner";
         state.currentTask.progress = 32;
         state.currentTask.lastUpdate = formatTime();
+        state.currentTask.updatedAt = new Date().toISOString();
 
         pushMessage("leader", t("responses.planning"));
         pushTimeline("planning_started", t("timelineText.planningStarted"));
@@ -3244,9 +3518,11 @@ function runLocalTaskLifecycle(userInput) {
       delay: 1400,
       run() {
         state.currentTask.phase = "writing";
+        state.currentTask.status = "writing";
         state.currentTask.owner = "writer";
         state.currentTask.progress = 68;
         state.currentTask.lastUpdate = formatTime();
+        state.currentTask.updatedAt = new Date().toISOString();
 
         pushMessage("leader", t("responses.writing"));
         pushTimeline("writing_started", t("timelineText.writingStarted"));
@@ -3258,9 +3534,11 @@ function runLocalTaskLifecycle(userInput) {
       delay: 1400,
       run() {
         state.currentTask.phase = "reviewing";
+        state.currentTask.status = "reviewing";
         state.currentTask.owner = "reviewer";
         state.currentTask.progress = 86;
         state.currentTask.lastUpdate = formatTime();
+        state.currentTask.updatedAt = new Date().toISOString();
 
         pushMessage("leader", t("responses.reviewing"));
         pushTimeline("review_started", t("timelineText.reviewStarted"));
@@ -3272,9 +3550,11 @@ function runLocalTaskLifecycle(userInput) {
       delay: 1400,
       run() {
         state.currentTask.phase = "completed";
+        state.currentTask.status = "completed";
         state.currentTask.owner = "leader";
         state.currentTask.progress = 100;
         state.currentTask.lastUpdate = formatTime();
+        state.currentTask.updatedAt = new Date().toISOString();
 
         pushMessage("leader", t("responses.completed"));
         pushTimeline("final_output_ready", t("timelineText.finalReady"));
@@ -3326,6 +3606,9 @@ function bindStageActions() {
   const confirmLeaderPublishButtons = [...document.querySelectorAll("[data-confirm-leader-publish]")];
   const cancelLeaderPublishButtons = [...document.querySelectorAll("[data-cancel-leader-publish]")];
   const retryTaskButtons = [...document.querySelectorAll("[data-retry-task]")];
+  const retryFailedStepButtons = [...document.querySelectorAll("[data-retry-failed-step]")];
+  const archiveTaskButtons = [...document.querySelectorAll("[data-archive-task]")];
+  const deleteTaskButtons = [...document.querySelectorAll("[data-delete-task]")];
 
   treeItems.forEach((button) => {
     button.addEventListener("click", () => {
@@ -3347,6 +3630,49 @@ function bindStageActions() {
 
       try {
         await retryCurrentTask();
+      } catch (error) {
+        console.error(error);
+        window.alert(formatModelRequestError(error));
+        renderApp();
+      }
+    });
+  });
+
+  retryFailedStepButtons.forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+
+      try {
+        await retryCurrentFailedStep();
+      } catch (error) {
+        console.error(error);
+        window.alert(formatModelRequestError(error));
+        renderApp();
+      }
+    });
+  });
+
+  archiveTaskButtons.forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+
+      try {
+        await archiveCurrentTask();
+      } catch (error) {
+        console.error(error);
+        window.alert(formatModelRequestError(error));
+        renderApp();
+      }
+    });
+  });
+
+  deleteTaskButtons.forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (!window.confirm(`${t("buttons.deleteTask")} ${state.currentTask.id}?`)) return;
+      button.disabled = true;
+
+      try {
+        await deleteCurrentTask();
       } catch (error) {
         console.error(error);
         window.alert(formatModelRequestError(error));
@@ -3490,6 +3816,6 @@ if (!state.currentTask.isEmpty) {
   setAgentStatusesByPhase(state.currentTask.phase);
 }
 renderApp();
-void syncRuntimeModels().then(() => {
+void syncBackendState().then(() => {
   renderApp();
 });

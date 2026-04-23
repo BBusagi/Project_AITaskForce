@@ -828,6 +828,19 @@ h3 {
   color: var(--muted);
 }
 
+.timeline-task {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 7px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 11px;
+}
+
 .message-body,
 .timeline-item p,
 .info-block p,
@@ -869,8 +882,12 @@ h3 {
 
 .task-stage-map {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 8px;
+}
+
+.task-stage-map.is-detailed {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
 .task-stage-node {
@@ -903,12 +920,18 @@ h3 {
   white-space: nowrap;
 }
 
+.task-stage-node small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .task-stage-node.is-done {
   border-color: rgba(141, 231, 168, 0.24);
 }
 
 .task-stage-node.is-done span,
-.task-stage-node.is-done strong {
+.task-stage-node.is-done strong,
+.task-stage-node.is-done small {
   color: var(--ok);
 }
 
@@ -918,8 +941,49 @@ h3 {
 }
 
 .task-stage-node.is-active span,
-.task-stage-node.is-active strong {
+.task-stage-node.is-active strong,
+.task-stage-node.is-active small {
   color: var(--text);
+}
+
+.task-stage-node.is-warning {
+  border-color: rgba(255, 211, 111, 0.42);
+  background: rgba(255, 211, 111, 0.08);
+}
+
+.task-stage-node.is-warning span,
+.task-stage-node.is-warning strong,
+.task-stage-node.is-warning small {
+  color: var(--warn);
+}
+
+.task-stage-node.is-failed {
+  border-color: rgba(255, 111, 111, 0.48);
+  background: rgba(255, 111, 111, 0.08);
+}
+
+.task-stage-node.is-failed span,
+.task-stage-node.is-failed strong,
+.task-stage-node.is-failed small {
+  color: #ff8f8f;
+}
+
+.stage-spinner {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(88, 210, 255, 0.22);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: stage-spin 900ms linear infinite;
+}
+
+@keyframes stage-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .output-block {
@@ -1090,6 +1154,17 @@ textarea:focus {
   color: var(--text);
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.08);
+}
+
+.btn-secondary.danger-btn {
+  color: #ffd4d4;
+  border-color: rgba(255, 111, 111, 0.28);
+  background: rgba(255, 111, 111, 0.08);
+}
+
+.btn-secondary.danger-btn:hover {
+  border-color: rgba(255, 111, 111, 0.46);
+  background: rgba(255, 111, 111, 0.14);
 }
 
 .theme-switcher {

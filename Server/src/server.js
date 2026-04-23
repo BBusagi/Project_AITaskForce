@@ -1,15 +1,19 @@
 const http = require("node:http");
 const { URL } = require("node:url");
 const { host, port, providers } = require("./config");
-const { createAndStartTask } = require("./orchestrator");
+const { createAndStartTask, retryFailedStep } = require("./orchestrator");
 const {
+  state,
   getTask,
   listTasks,
+  archiveTask,
+  deleteTask,
   getTaskSubtasks,
   getTaskEvents,
   getTaskMessages,
   buildAgentsView,
   buildSnapshot,
+  buildTeamTimeline,
 } = require("./store");
 const {
   buildRouteId,
@@ -25,7 +29,7 @@ function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   });
   res.end(JSON.stringify(payload));
@@ -199,6 +203,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/api/timeline") {
+      sendJson(res, 200, buildTeamTimeline());
+      return;
+    }
+
     if (req.method === "POST" && pathname === "/api/tasks") {
       const body = await readJsonBody(req);
       if (!body.userInput || typeof body.userInput !== "string") {
@@ -239,6 +248,65 @@ const server = http.createServer(async (req, res) => {
         title: task.title,
         status: task.status,
         retryOf: sourceTask.id,
+      });
+      return;
+    }
+
+    const taskRetryStepMatch = pathname.match(/^\/api\/tasks\/([^/]+)\/retry-step$/);
+    if (req.method === "POST" && taskRetryStepMatch) {
+      const task = getTask(taskRetryStepMatch[1]);
+      if (!task) {
+        notFound(res);
+        return;
+      }
+
+      retryFailedStep(task.id);
+      sendJson(res, 202, {
+        taskId: task.id,
+        title: task.title,
+        status: task.status,
+      });
+      return;
+    }
+
+    const taskArchiveMatch = pathname.match(/^\/api\/tasks\/([^/]+)\/archive$/);
+    if (req.method === "POST" && taskArchiveMatch) {
+      if (state.taskRuns.get(taskArchiveMatch[1])) {
+        sendJson(res, 409, { error: "Cannot archive a running task" });
+        return;
+      }
+
+      const task = archiveTask(taskArchiveMatch[1]);
+      if (!task) {
+        notFound(res);
+        return;
+      }
+
+      console.log(`TASK ARCHIVE task=${task.id} title=${JSON.stringify(task.title)}`);
+      sendJson(res, 200, {
+        taskId: task.id,
+        archivedAt: task.archivedAt,
+      });
+      return;
+    }
+
+    const taskDeleteMatch = pathname.match(/^\/api\/tasks\/([^/]+)$/);
+    if (req.method === "DELETE" && taskDeleteMatch) {
+      if (state.taskRuns.get(taskDeleteMatch[1])) {
+        sendJson(res, 409, { error: "Cannot delete a running task" });
+        return;
+      }
+
+      const deleted = deleteTask(taskDeleteMatch[1]);
+      if (!deleted) {
+        notFound(res);
+        return;
+      }
+
+      console.log(`TASK DELETE task=${taskDeleteMatch[1]}`);
+      sendJson(res, 200, {
+        taskId: taskDeleteMatch[1],
+        deleted: true,
       });
       return;
     }

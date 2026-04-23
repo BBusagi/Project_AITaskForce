@@ -40,12 +40,13 @@ Implemented today:
 - Writer default route set to `Ollama Local / qwen3:8b`.
 - Per-agent provider/model route display in Team overview and agent detail.
 - Settings controls for theme, language, and LLM enablement.
+- JSON persistence MVP for tasks, subtasks, events, messages, and task numbering.
 - Mock Projects and Usage workspaces.
 
 Not implemented yet:
 
-- Persistent task, chat, event, and route storage.
-- Real end-to-end orchestrator execution through all agents.
+- SQLite persistence and migration tooling.
+- Persistent direct agent chat, model route history, and Settings state.
 - Live token telemetry.
 - Full Web client backend integration.
 - Mobile status client.
@@ -97,6 +98,47 @@ Attempt 2: prior issues + changed regions + regression only
 After attempt 2: human_confirmation
 ```
 
+## Collaboration Framework
+
+The current project can already be described as a structured AI collaboration workflow, but not yet as a fully autonomous multi-agent society.
+
+The useful framework emerging from the MVP is:
+
+```text
+1. Intake
+   Natural conversation with Leader
+
+2. Task Contract
+   Leader turns the request into an explicit task
+
+3. Planning
+   Planner defines objective, constraints, output format, and handoff logic
+
+4. Execution
+   Specialist agent produces a structured submission
+
+5. Quality Gate
+   Reviewer applies a fixed rubric and machine-readable issue contract
+
+6. Scoped Revision
+   Writer revises only blocking issues and changed regions
+
+7. Escalation
+   Human confirmation after bounded automated review attempts
+
+8. Finalization
+   Leader synthesizes the final deliverable
+
+9. Observability
+   Every stage records events, model route, invocation status, intermediate outputs, and review decisions
+```
+
+This is a role-based multi-agent workflow framework:
+
+- Agents are workflow roles, not fully autonomous long-running processes yet.
+- Different roles can route to different model providers.
+- Value comes from bounded execution, inspectable state, quality gates, and recoverable failure handling.
+
 See `Agents.md` for the full product problem, workflow model, and roadmap.
 
 ## Run
@@ -125,6 +167,12 @@ Default editable backend config:
 
 ```text
 Server/atf.config.js
+```
+
+Default JSON persistence location:
+
+```text
+Server/.atf-data/store.json
 ```
 
 Current default local writer model:
@@ -161,6 +209,7 @@ http://localhost:8000/Clients/Web/
 The next development phase is to move from a convincing shell to a usable observable workflow:
 
 - Persist tasks, subtasks, events, direct chat messages, and model route history.
+- Move persistence from JSON MVP to SQLite once the schema stabilizes.
 - Run the fixed Leader -> Planner -> Writer -> Reviewer -> Leader loop through real model calls.
 - Add validation surfaces for reviewer checks, retry reasons, and final approval.
 - Expand the Reviewer contract UI so rubric status, issue IDs, changed regions, regressions, and human-confirmation state are readable without opening raw JSON.

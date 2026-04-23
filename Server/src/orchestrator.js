@@ -6,12 +6,14 @@ const {
   addEvent,
   addMessage,
   getTask,
+  getTaskSubtasks,
   state,
 } = require("./store");
 const { generate, resolveRoute } = require("./model-gateway");
 const { providers } = require("./config");
 
 const MAX_REVIEW_ATTEMPTS = 2;
+const MAX_FAILED_STEP_REVIEW_ATTEMPTS = 3;
 const REVIEW_RUBRIC = ["completeness", "correctness", "format", "consistency", "regression"];
 
 function sleep(ms) {
@@ -485,6 +487,184 @@ function addLifecycleMessage(taskId, senderId, content) {
   });
 }
 
+function getLatestCompletedPlan(taskId) {
+  return [...getTaskSubtasks(taskId)].reverse().find((subtask) => subtask.type === "plan" && subtask.status === "completed" && subtask.outputText);
+}
+
+function getLatestWriterSubmission(taskId) {
+  const subtask = [...getTaskSubtasks(taskId)]
+    .reverse()
+    .find((item) => ["draft", "revise"].includes(item.type) && item.status === "completed" && (item.writerSubmission || item.outputText));
+  if (!subtask) return null;
+  return subtask.writerSubmission || publicWriterSubmission(normalizeWriterSubmission(subtask.outputText));
+}
+
+function getLatestReviewDecision(taskId) {
+  const subtask = [...getTaskSubtasks(taskId)]
+    .reverse()
+    .find((item) => item.type === "review" && (item.reviewDecision || item.outputText));
+  if (!subtask) return null;
+  return subtask.reviewDecision || normalizeReviewDecision(subtask.outputText, 1);
+}
+
+function getLastErroredSubtask(taskId) {
+  return [...getTaskSubtasks(taskId)]
+    .reverse()
+    .find((subtask) => ["failed", "rejected"].includes(subtask.status) || ["failed", "timeout"].includes(subtask.modelInvocation?.status));
+}
+
+async function runLeaderFinal(taskId, task, planText, writerSubmission, reviewDecision) {
+  addLifecycleMessage(taskId, "leader", `Leader is synthesizing the final response through route ${describeRoute("leader")}.`);
+  logTaskEvent(taskId, "leader_started", "Leader started final synthesis.", {
+    route: describeRoute("leader"),
+  });
+
+  const finalSubtask = addSubtask(taskId, {
+    type: "summary",
+    assignedAgentId: "leader",
+    inputText: formatJson(reviewDecision),
+    status: "running",
+  });
+  const finalResult = await runModelForSubtask(
+    taskId,
+    finalSubtask.id,
+    "leader",
+    buildLeaderPrompt(task, planText, writerSubmission.draft_text, reviewDecision)
+  );
+  updateSubtask(taskId, finalSubtask.id, {
+    outputText: finalResult.text,
+    status: "completed",
+  });
+
+  updateTask(taskId, {
+    status: "completed",
+    stageOwnerId: "leader",
+    finalOutput: finalResult.text,
+    errorMessage: null,
+  });
+  addEvent(taskId, {
+    actorType: "agent",
+    actorId: "leader",
+    eventType: "final_output_ready",
+    message: "Leader synthesized the final output.",
+    subtaskId: finalSubtask.id,
+    metadata: {
+      provider: finalResult.provider,
+      model: finalResult.model,
+    },
+  });
+  addLifecycleMessage(taskId, "leader", "Final output is ready.");
+  logTaskEvent(taskId, "leader_completed", "Leader completed final output.", {
+    provider: finalResult.provider,
+    model: finalResult.model,
+    outputChars: textLength(finalResult.text),
+  });
+}
+
+async function runWriterReviewFromState(taskId, task, planText, options = {}) {
+  let writerSubmission = options.writerSubmission || null;
+  let reviewDecision = options.reviewDecision || null;
+  let reviewPassed = false;
+
+  for (let attempt = 1; attempt <= MAX_FAILED_STEP_REVIEW_ATTEMPTS; attempt += 1) {
+    const shouldStartWithReview = options.startWithReview && attempt === 1 && writerSubmission;
+    let previousSubmissionForReview = null;
+
+    if (!shouldStartWithReview) {
+      previousSubmissionForReview = writerSubmission;
+      const isRevision = Boolean(writerSubmission && reviewDecision);
+      updateTask(taskId, { status: isRevision ? "revising" : "writing", stageOwnerId: "writer", errorMessage: null });
+      addEvent(taskId, {
+        actorType: "system",
+        actorId: "writer",
+        eventType: isRevision ? "revision_started" : "writing_started",
+        message: isRevision ? `Writer started failed-step revision attempt ${attempt}.` : "Writer restarted the failed writing step.",
+      });
+      logTaskEvent(taskId, isRevision ? "writer_revision_retry_started" : "writer_step_retry_started", "Writer retry step started.", {
+        attempt,
+        route: describeRoute("writer"),
+      });
+
+      const draftSubtask = addSubtask(taskId, {
+        type: isRevision ? "revise" : "draft",
+        assignedAgentId: "writer",
+        inputText: isRevision ? formatJson(reviewDecision) : planText,
+        status: "running",
+      });
+      const writerPrompt = isRevision
+        ? buildWriterRevisionPrompt(task, planText, writerSubmission, reviewDecision, attempt)
+        : buildWriterPrompt(task, planText);
+      const draftResult = await runModelForSubtask(taskId, draftSubtask.id, "writer", writerPrompt);
+      writerSubmission = normalizeWriterSubmission(draftResult.text);
+      updateSubtask(taskId, draftSubtask.id, {
+        outputText: formatJson(publicWriterSubmission(writerSubmission)),
+        writerSubmission: publicWriterSubmission(writerSubmission),
+        status: "completed",
+      });
+      addEvent(taskId, {
+        actorType: "agent",
+        actorId: "writer",
+        eventType: isRevision ? "revision_completed" : "writing_completed",
+        message: isRevision ? `Writer completed failed-step revision attempt ${attempt}.` : "Writer completed failed-step retry draft.",
+        subtaskId: draftSubtask.id,
+      });
+    }
+
+    await sleep(500);
+    updateTask(taskId, { status: "reviewing", stageOwnerId: "reviewer", errorMessage: null });
+    addEvent(taskId, {
+      actorType: "system",
+      actorId: "reviewer",
+      eventType: "review_started",
+      message: `Reviewer started failed-step retry check attempt ${attempt}.`,
+    });
+
+    const reviewSubtask = addSubtask(taskId, {
+      type: "review",
+      assignedAgentId: "reviewer",
+      inputText: writerSubmission.draft_text,
+      status: "running",
+    });
+    const reviewPrompt =
+      reviewDecision && !shouldStartWithReview
+        ? buildReviewerRevisionPrompt(task, planText, previousSubmissionForReview, writerSubmission, reviewDecision, attempt)
+        : buildReviewerPrompt(task, planText, writerSubmission.draft_text);
+    const reviewResult = await runModelForSubtask(taskId, reviewSubtask.id, "reviewer", reviewPrompt);
+    reviewDecision = normalizeReviewDecision(reviewResult.text, attempt);
+    reviewPassed = isReviewPassed(reviewDecision);
+    updateSubtask(taskId, reviewSubtask.id, {
+      outputText: formatJson(reviewDecision),
+      status: reviewPassed ? "completed" : "rejected",
+      reviewComment: reviewPassed ? null : formatJson(reviewDecision),
+      reviewDecision,
+    });
+    addEvent(taskId, {
+      actorType: "agent",
+      actorId: "reviewer",
+      eventType: reviewPassed ? "review_passed" : "review_failed",
+      message: reviewPassed ? `Reviewer approved failed-step retry attempt ${attempt}.` : `Reviewer rejected failed-step retry attempt ${attempt}.`,
+      subtaskId: reviewSubtask.id,
+    });
+
+    if (reviewPassed) {
+      await runLeaderFinal(taskId, task, planText, writerSubmission, reviewDecision);
+      return;
+    }
+  }
+
+  updateTask(taskId, {
+    status: "human_confirmation",
+    stageOwnerId: "leader",
+    errorMessage: `Human confirmation required after ${MAX_FAILED_STEP_REVIEW_ATTEMPTS} failed step retry attempts.`,
+  });
+  addEvent(taskId, {
+    actorType: "system",
+    actorId: "leader",
+    eventType: "human_confirmation_required",
+    message: `Task escalated after failed-step retry reached ${MAX_FAILED_STEP_REVIEW_ATTEMPTS} attempts.`,
+  });
+}
+
 async function runTask(taskId) {
   if (state.taskRuns.get(taskId)) return;
   state.taskRuns.set(taskId, true);
@@ -785,6 +965,92 @@ function createAndStartTask(input) {
   return task;
 }
 
+function retryFailedStep(taskId) {
+  if (state.taskRuns.get(taskId)) {
+    throw new Error("Task is already running");
+  }
+
+  const task = getTask(taskId);
+  if (!task) {
+    throw new Error("Task not found");
+  }
+
+  const failedSubtask = getLastErroredSubtask(taskId);
+  if (!failedSubtask) {
+    throw new Error("No failed subtask found for step retry");
+  }
+
+  state.taskRuns.set(taskId, true);
+  addLifecycleMessage(taskId, "leader", `Retrying failed step: ${failedSubtask.assignedAgentId} / ${failedSubtask.type}.`);
+  addEvent(taskId, {
+    actorType: "system",
+    actorId: "leader",
+    eventType: "retry_started",
+    message: `Retrying failed step ${failedSubtask.assignedAgentId} / ${failedSubtask.type}.`,
+    subtaskId: failedSubtask.id,
+  });
+  logTaskEvent(taskId, "retry_failed_step_started", "Retrying failed step.", {
+    failedSubtaskId: failedSubtask.id,
+    type: failedSubtask.type,
+    agent: failedSubtask.assignedAgentId,
+  });
+
+  void (async () => {
+    try {
+      if (failedSubtask.type === "plan") {
+        state.taskRuns.delete(taskId);
+        await runTask(taskId);
+        return;
+      }
+
+      const planSubtask = getLatestCompletedPlan(taskId);
+      if (!planSubtask) {
+        throw new Error("Cannot retry failed step without a completed Planner output");
+      }
+
+      if (failedSubtask.type === "summary") {
+        const writerSubmission = getLatestWriterSubmission(taskId);
+        const reviewDecision = getLatestReviewDecision(taskId);
+        if (!writerSubmission || !reviewDecision) {
+          throw new Error("Cannot retry Leader final without completed Writer and Reviewer outputs");
+        }
+        await runLeaderFinal(taskId, task, planSubtask.outputText, writerSubmission, reviewDecision);
+        return;
+      }
+
+      const writerSubmission = getLatestWriterSubmission(taskId);
+      const reviewDecision = getLatestReviewDecision(taskId);
+      const startWithReview = failedSubtask.type === "review" && failedSubtask.status !== "rejected";
+      await runWriterReviewFromState(taskId, task, planSubtask.outputText, {
+        startWithReview,
+        writerSubmission,
+        reviewDecision,
+      });
+    } catch (error) {
+      updateTask(taskId, {
+        status: "failed",
+        stageOwnerId: "leader",
+        errorMessage: error.message,
+      });
+      addEvent(taskId, {
+        actorType: "system",
+        actorId: "leader",
+        eventType: "task_failed",
+        message: error.message,
+      });
+      addLifecycleMessage(taskId, "leader", `Failed-step retry failed: ${error.message}`);
+      logTaskEvent(taskId, "retry_failed_step_failed", "Failed-step retry failed.", {
+        error: error.message,
+      });
+    } finally {
+      state.taskRuns.delete(taskId);
+    }
+  })();
+
+  return task;
+}
+
 module.exports = {
   createAndStartTask,
+  retryFailedStep,
 };

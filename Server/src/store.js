@@ -1,5 +1,7 @@
 const { randomUUID } = require("node:crypto");
 const { getConfiguredRoutes } = require("./model-gateway");
+const { isTerminalTaskStatus } = require("./schema");
+const { readStoreSnapshot, writeStoreSnapshot } = require("./persistence/json-store");
 
 const agentDefinitions = [
   {
@@ -45,6 +47,34 @@ const state = {
   nextTaskNumber: 1,
 };
 
+function serializeState() {
+  return {
+    nextTaskNumber: state.nextTaskNumber,
+    tasks: [...state.tasks.values()],
+    subtasks: Object.fromEntries(state.subtasks),
+    events: Object.fromEntries(state.events),
+    messages: Object.fromEntries(state.messages),
+  };
+}
+
+function persistState() {
+  writeStoreSnapshot(serializeState());
+}
+
+function hydrateState() {
+  const snapshot = readStoreSnapshot();
+  const maxTaskNumber = snapshot.tasks.reduce((max, task) => Math.max(max, Number(task.number) || 0), 0);
+
+  state.nextTaskNumber = Math.max(snapshot.nextTaskNumber, maxTaskNumber + 1, 1);
+
+  for (const task of snapshot.tasks) {
+    state.tasks.set(task.id, task);
+    state.subtasks.set(task.id, Array.isArray(snapshot.subtasks[task.id]) ? snapshot.subtasks[task.id] : []);
+    state.events.set(task.id, Array.isArray(snapshot.events[task.id]) ? snapshot.events[task.id] : []);
+    state.messages.set(task.id, Array.isArray(snapshot.messages[task.id]) ? snapshot.messages[task.id] : []);
+  }
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -89,6 +119,7 @@ function createTask({ title, userInput, priority = "medium", createdBy = "user" 
     finalOutput: null,
     errorMessage: null,
     retryCount: 0,
+    archivedAt: null,
     stageOwnerId: "leader",
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -98,6 +129,7 @@ function createTask({ title, userInput, priority = "medium", createdBy = "user" 
   state.subtasks.set(taskId, []);
   state.events.set(taskId, []);
   state.messages.set(taskId, []);
+  persistState();
   return task;
 }
 
@@ -108,6 +140,7 @@ function updateTask(taskId, patch) {
   if (patch.status) {
     task.stageOwnerId = patch.stageOwnerId || getStatusOwner(patch.status);
   }
+  persistState();
   return task;
 }
 
@@ -130,6 +163,7 @@ function addSubtask(taskId, data) {
   };
 
   state.subtasks.get(taskId).push(subtask);
+  persistState();
   return subtask;
 }
 
@@ -139,6 +173,7 @@ function updateSubtask(taskId, subtaskId, patch) {
   if (!subtask) return null;
 
   Object.assign(subtask, patch, { updatedAt: nowIso() });
+  persistState();
   return subtask;
 }
 
@@ -156,6 +191,7 @@ function addEvent(taskId, data) {
   };
 
   state.events.get(taskId).push(event);
+  persistState();
   return event;
 }
 
@@ -170,6 +206,7 @@ function addMessage(taskId, data) {
   };
 
   state.messages.get(taskId).push(message);
+  persistState();
   return message;
 }
 
@@ -178,7 +215,20 @@ function getTask(taskId) {
 }
 
 function listTasks() {
-  return [...state.tasks.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return [...state.tasks.values()].filter((task) => !task.archivedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+function archiveTask(taskId) {
+  return updateTask(taskId, { archivedAt: nowIso() });
+}
+
+function deleteTask(taskId) {
+  const deleted = state.tasks.delete(taskId);
+  state.subtasks.delete(taskId);
+  state.events.delete(taskId);
+  state.messages.delete(taskId);
+  if (deleted) persistState();
+  return deleted;
 }
 
 function getTaskSubtasks(taskId) {
@@ -197,7 +247,7 @@ function buildAgentsView() {
   const configuredRoutes = getConfiguredRoutes();
 
   return agentDefinitions.map((agent) => {
-    const activeTask = [...state.tasks.values()].find((task) => task.stageOwnerId === agent.id && task.status !== "completed" && task.status !== "failed");
+    const activeTask = [...state.tasks.values()].find((task) => task.stageOwnerId === agent.id && !isTerminalTaskStatus(task.status));
     const idleLikeStatus = agent.id === "writer" ? "waiting" : "idle";
     const route = configuredRoutes[agent.id];
 
@@ -230,11 +280,35 @@ function buildSnapshot(taskId) {
   };
 }
 
+function buildTeamTimeline() {
+  const timeline = [];
+
+  for (const task of state.tasks.values()) {
+    if (task.archivedAt) continue;
+
+    for (const event of getTaskEvents(task.id)) {
+      timeline.push({
+        ...event,
+        taskId: task.id,
+        taskTitle: task.title,
+        taskNumber: task.number ?? null,
+        taskStatus: task.status,
+      });
+    }
+  }
+
+  return timeline.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+hydrateState();
+
 module.exports = {
   state,
   agentDefinitions,
   createTask,
   updateTask,
+  archiveTask,
+  deleteTask,
   addSubtask,
   updateSubtask,
   addEvent,
@@ -246,4 +320,5 @@ module.exports = {
   getTaskMessages,
   buildAgentsView,
   buildSnapshot,
+  buildTeamTimeline,
 };
