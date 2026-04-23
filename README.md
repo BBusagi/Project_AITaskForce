@@ -2,128 +2,64 @@
 
 AI Task Force is a multi-agent workspace MVP for text tasks.
 
-The goal is not to build a general autonomous agent platform first. The goal is to make one fixed, inspectable, product-grade collaboration flow feel real:
+It is not trying to become a general autonomous agent platform first. The current goal is to make one fixed, inspectable collaboration loop feel usable:
 
-`User -> Leader -> Planner -> Writer -> Reviewer -> Leader Final Response`
+```text
+User -> Leader -> Planner -> Writer -> Reviewer -> Leader Final Response
+```
 
-The repository currently contains two clients under one shared product model:
+## Documentation Roles
 
-- `Clients/Web` for the browser workspace MVP
-- `Clients/Desktop` for the Electron-style desktop shell prototype
-- `Server` for the minimal ATF backend and Ollama integration layer
+- `README.md` is the project entry point. It explains what this repository is, how to run it, what currently works, and where to find deeper specs.
+- `Agents.md` is the canonical product and agent specification. It contains the workflow model, agent responsibilities, routing principles, UI constraints, implementation notes, and roadmap.
 
-## Product Direction
-
-AI Task Force should feel like an AI team workspace, not a plain chatbot.
-
-Users should be able to:
-
-- submit work through chat
-- see which agent currently owns the task
-- inspect the workflow stage and task history
-- drill into team members, projects, and usage
-- review intermediate and final outputs
-
-## Current Product Signature
-
-One product pattern is important enough to call out explicitly because it has become part of the identity of the Desktop client:
-
-- `Team` is not just a flat agent list
-- it opens with a workspace-level `Overview` conversation and summary surface
-- the user can then drill down into individual agents from the same sidebar tree
-
-This `overview first, agent drilldown second` structure is now a product feature. It frames the AI team as one coordinated unit before exposing each specialist.
+If the two documents conflict, treat `Agents.md` as the source of truth for product behavior and AI coding-agent instructions.
 
 ## Repository Structure
 
-- [Agents.md](/mnt/d/GitProject/Project_AITaskForce/Agents.md)
-  Shared product spec, workflow rules, client split, and implementation status.
-- [Clients/Web](/mnt/d/GitProject/Project_AITaskForce/Clients/Web)
-  Browser MVP for the shared workspace model.
-- [Clients/Desktop](/mnt/d/GitProject/Project_AITaskForce/Clients/Desktop)
-  Desktop shell prototype with outer rail navigation and dialogue-first interaction.
-- [Server](/mnt/d/GitProject/Project_AITaskForce/Server)
-  Minimal backend with in-memory orchestration, task APIs, and Ollama model routing.
+- `Clients/Web`
+  Browser workspace MVP for task input, agent structure, timeline, and task history.
+- `Clients/Desktop`
+  Electron-style desktop shell with outer rail navigation, workspace sidebar, direct agent chat, Team, Task, Projects, Usage, and Settings surfaces.
+- `Server`
+  Minimal ATF backend with in-memory task APIs, model gateway, direct chat endpoint, Ollama integration, and API model candidates.
+- `Agents.md`
+  Product spec, workflow rules, agent architecture, roadmap, and implementation constraints.
 
-## Desktop Status
+## Current Status
 
-The current Desktop prototype is no longer an internal dashboard page. It is a full-window shell with:
+Implemented today:
 
-- full-height outer app layout
-- fixed left rail navigation
-- collapsible middle resource sidebar
-- right-side full workspace stage
+- Static Web MVP.
+- Electron-ready Desktop shell prototype.
+- Full-window Desktop layout with left rail, collapsible middle sidebar, and right workspace stage.
+- `Team` overview plus per-agent drilldown.
+- Direct agent chat through `POST /api/chat`.
+- Ollama direct chat through native `/api/chat`.
+- OpenAI and Claude API model candidates in the model gateway.
+- Writer default route set to `Ollama Local / qwen3:8b`.
+- Per-agent provider/model route display in Team overview and agent detail.
+- Settings controls for theme, language, and LLM enablement.
+- Mock Projects and Usage workspaces.
 
-Current top-level Desktop workspaces:
+Not implemented yet:
 
-- `Chat`
-- `Team`
-- `Task`
-- `Projects`
-- `Usage`
-- `Settings`
+- Persistent task, chat, event, and route storage.
+- Real end-to-end orchestrator execution through all agents.
+- Live token telemetry.
+- Full Web client backend integration.
+- Mobile status client.
+- Safe Leader-controlled document editing workflow.
 
-Current Desktop capabilities:
+## Product Problem Summary
 
-- dialogue-first shell with `Leader` thread and task compose flow
-- backend-first task submission with fallback to local mock flow
-- `Team` workspace with `Overview` plus per-agent drilldown
-- list and grid views for team overview
-- person-style SVG role icons for agents
-- `Projects` workspace for project and module-level tracking
-- `Usage` workspace for token and cost visualization by team and by project
-- `Settings` workspace with theme switching
-- `Settings` workspace with interface language switching
-- English default UI with optional Simplified Chinese
+AI-assisted development often becomes repeated trial and error because the working loop is opaque: information is incomplete, execution is hard to inspect, validation is weak, and model reasoning is probabilistic.
 
-## Web Status
+AI Task Force treats this as a product problem. The workspace should make agent ownership, model routes, task state, project context, and validation signals visible while work is happening.
 
-The current Web client remains a static MVP focused on the shared task workspace model:
-
-- task input
-- agent workspace structure
-- task timeline and event log
-- task history and detail-oriented browsing
-
-## What Is Implemented Today
-
-- repository split into `Clients/Web` and `Clients/Desktop`
-- minimal backend under `Server`
-- static Web MVP prototype
-- Electron-ready Desktop prototype shell
-- shared multi-agent product framing across both clients
-- in-memory task orchestration API
-- Ollama-backed writer route in the backend
-- Desktop polling against backend task snapshots when the API is available
-- mock team, project, and usage data in the Desktop client
-
-## What Is Not Implemented Yet
-
-- persistent storage
-- remote GPT routing for leader / planner / reviewer
-- live token telemetry
-- full backend integration in the Web client
+See `Agents.md` for the full product problem, workflow model, and roadmap.
 
 ## Run
-
-### Web
-
-Open [Clients/Web/index.html](/mnt/d/GitProject/Project_AITaskForce/Clients/Web/index.html) directly, or serve the repository statically:
-
-```bash
-python3 -m http.server 8000
-```
-
-Then open `http://localhost:8000/Clients/Web/`
-
-### Desktop
-
-From `Clients/Desktop`:
-
-```bash
-npm install
-npm start
-```
 
 ### Server
 
@@ -157,23 +93,36 @@ Current default local writer model:
 qwen3:8b
 ```
 
-Optional environment variables:
+### Desktop
+
+From `Clients/Desktop`:
 
 ```bash
-set OLLAMA_BASE_URL=http://127.0.0.1:11434
-set ATF_OLLAMA_WRITER_MODEL=qwen2.5:7b
-set ATF_SERVER_PORT=8787
+npm install
+npm start
 ```
 
-## Current Development Focus
+### Web
 
-The current priority is still frontend-first validation:
+Open `Clients/Web/index.html` directly, or serve the repository statically:
 
-- make the system feel like a real AI team product
-- keep the workflow easy to inspect
-- make the Desktop shell feel like a real client app
-- move from in-memory backend state to persistent task storage
-- extend model routing beyond the local writer path
-- keep Web and Desktop aligned to the same product vocabulary
+```bash
+python3 -m http.server 8000
+```
 
-The next backend phase is persistence, richer model routing, and shared client integration instead of frontend-only local state.
+Then open:
+
+```text
+http://localhost:8000/Clients/Web/
+```
+
+## Near-Term Direction
+
+The next development phase is to move from a convincing shell to a usable observable workflow:
+
+- Persist tasks, subtasks, events, direct chat messages, and model route history.
+- Run the fixed Leader -> Planner -> Writer -> Reviewer -> Leader loop through real model calls.
+- Add validation surfaces for reviewer checks, retry reasons, and final approval.
+- Connect Web to the shared backend for project and agent status visibility.
+- Add lightweight mobile or mobile-friendly status views.
+- Allow the Leader to perform controlled lightweight document edits for status notes, README updates, and roadmap summaries.
