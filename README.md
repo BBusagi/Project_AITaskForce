@@ -1,6 +1,6 @@
 # AI Task Force
 
-AI Task Force is a multi-agent workspace MVP for text tasks.
+AI Task Force is a structured AI team workspace for bounded execution tasks.
 
 It is not trying to become a general autonomous agent platform first. The current goal is to make one fixed, inspectable collaboration loop feel usable:
 
@@ -18,11 +18,11 @@ If the two documents conflict, treat `Agents.md` as the source of truth for prod
 ## Repository Structure
 
 - `Clients/Web`
-  Browser workspace MVP for task input, agent structure, timeline, and task history.
+  Browser workspace client for task input, agent structure, timeline, and task history.
 - `Clients/Desktop`
   Electron-style desktop shell with outer rail navigation, workspace sidebar, direct agent chat, Team, Task, Projects, Usage, and Settings surfaces.
 - `Server`
-  Minimal ATF backend with JSON-backed task APIs, fixed multi-agent orchestration, model gateway, direct chat endpoint, Ollama integration, and API model candidates.
+  ATF server with JSON-backed task APIs, fixed multi-agent orchestration, model gateway, direct chat endpoint, Ollama integration, and API model candidates.
 - `Agents.md`
   Product spec, workflow rules, agent architecture, roadmap, and implementation constraints.
 
@@ -30,7 +30,7 @@ If the two documents conflict, treat `Agents.md` as the source of truth for prod
 
 Implemented now:
 
-- Static Web MVP for the shared workspace model.
+- Static Web workspace shell for the shared task and event model.
 - Full-window Desktop shell with outer rail, collapsible middle sidebar, and right workspace stage.
 - `Chat`, `Team`, `Task`, `Projects`, `Usage`, and `Settings` workspaces in the Desktop client.
 - Leader-first chat flow with requirement negotiation plus a separate task-publication action.
@@ -60,7 +60,7 @@ Implemented now:
   retry only the failed step
   archive
   delete
-- Review contract MVP with:
+- Review contract foundation with:
   fixed rubric
   structured Writer submission
   machine-readable Reviewer output
@@ -74,13 +74,13 @@ Implemented now:
   response size
   request status
 - Backend terminal logging for chat requests and key task lifecycle events.
-- JSON persistence MVP for tasks, subtasks, events, messages, archived state, and task numbering.
+- JSON-backed persistence for tasks, subtasks, events, messages, archived state, and task numbering.
 - Mock Projects and Usage workspaces.
 
 Not implemented yet:
 
 - SQLite persistence and migration tooling.
-- Persistent direct-chat history outside the current in-memory Desktop client state.
+- Persistent direct-chat history across the whole product surface.
 - Persistent Settings and route-selection state across the whole product surface.
 - Live token telemetry and usage accounting.
 - Full Web client backend integration.
@@ -90,7 +90,7 @@ Not implemented yet:
 
 ## Product Problem Summary
 
-AI Task Force treats repeated AI trial-and-error as a product problem, not only a model-quality problem. The current MVP focuses on two core issues.
+AI Task Force treats repeated AI trial-and-error as a product problem, not only a model-quality problem. The current system focuses on two core issues.
 
 ### Problem 1: The Execution Loop Is Opaque
 
@@ -113,7 +113,7 @@ The review layer needs a more formal contract:
 - A pass threshold that rejects only blocking defects, not minor style preferences.
 - A bounded retry policy: max 2 automated review attempts, followed by human confirmation instead of endless automated revision.
 
-Current MVP implementation:
+Current implementation:
 
 ```text
 Writer submission
@@ -138,7 +138,7 @@ After attempt 2: human_confirmation
 
 The current project can already be described as a structured AI collaboration workflow, but not yet as a fully autonomous multi-agent society.
 
-The useful framework emerging from the MVP is:
+The useful framework emerging from the current system is:
 
 ```text
 1. Intake
@@ -327,7 +327,7 @@ Needed work:
 
 Purpose:
 
-- move from JSON MVP persistence toward a schema-backed runtime store
+- move from the current JSON-backed persistence layer toward a schema-backed runtime store
 
 Needed work:
 
@@ -431,197 +431,116 @@ http://localhost:8000/Clients/Web/
 
 ## Roadmap
 
-### Current Position
+### Solo-Developer Principle
 
-The project is currently between:
+This roadmap is intentionally compressed for solo development.
 
-- `M3 Leader Task Publication`
-- `M4 Fixed Multi-Agent Workflow`
-- `M5 Task Observability And Recovery`
+The rule is simple:
 
-`M1` and most of `M2` are already in place. `M6` exists only as a JSON-based MVP. `M7` and `M8` are still future work.
+- keep focus on the smallest execution framework that proves the product idea
+- do not spend core execution time on secondary clients or broad product surfaces
+- move non-blocking expansion work into TODO instead of treating it as current roadmap scope
 
-### Milestone Structure
+Development should be MVP-driven first and roadmap-guided second:
 
-From this point onward, milestones should not be treated as a separate list from engineering modules.
+- MVP decides what the system must deliver now
+- roadmap decides the minimum runtime capabilities needed to deliver it
+- if a feature does not unblock the current MVP, it should usually not be on the current critical path
 
-The intended structure is:
+For this project, the minimum product-defining loop is:
 
 ```text
-Milestone
--> Objective
--> Priority
--> Required Modules
--> Acceptance
--> Still Missing
+Leader -> Planner -> Writer -> Reviewer -> Final
 ```
 
-In other words:
+If that loop is not stable, observable, and recoverable, extra clients and extra panels do not prove the product.
 
-- milestones define the product goal
-- priority defines how urgently that goal should be pushed
-- modules define the engineering capabilities required to reach that goal
-- acceptance defines when the milestone can be treated as reached
+### Current Position
 
-### What "Usable At MVP Level" Means
+The project already has:
 
-When this roadmap says a milestone is "usable at MVP level", it does not mean the area is fully complete.
+- a usable Desktop shell
+- routeable model connectivity
+- Leader task publication
+- a working fixed workflow slice
 
-It means:
+The main gap is no longer surface layout. The main gap is execution-core hardening.
 
-- the main user path exists
-- the feature can be exercised end to end
-- the behavior is usable for demos and narrow-scope real testing
+### Active MVP Targets
 
-It does not mean:
+#### MVP 1: PPT Generation System
 
-- production-grade persistence is finished
-- failure handling is fully hardened
-- cross-client state is complete
-- every edge case already has a stable runtime contract
+Inputs:
 
-### Milestone Map
+- topic
+- target audience
+- slide count
+- style
+- language
 
-#### M0 Product Definition
+Expected outputs:
 
-- Define AI Task Force as a structured AI team workspace rather than a general autonomous agent platform.
-- Lock the shared product language used by Desktop, Web, Server, and `Agents.md`.
-
-Status:
-
-- mostly complete
-
-Priority:
-
-- `P0 foundation`
-
-Required modules:
-
-- shared product vocabulary
-- shared task and event model
-- shared routing language
+- PPT outline
+- per-slide copy
+- speaker notes
+- final `.pptx`
+- review report
 
 Acceptance:
 
-- Desktop, Web, Server, and docs describe the same bounded system
-- the project is framed as an AI workspace and runtime, not as a free-form autonomous platform
+- structure is complete
+- slide count is correct
+- tone matches the request
+- content has no obvious contradictions
+- the system can export a `.pptx`
 
-Still missing:
+Current position:
 
-- remove leftover MVP-era wording that conflicts with the runtime framing
-- keep Desktop, Web, and docs aligned as the execution model evolves
+- this is the active MVP focus
+- the current system already covers intake, planning, writing, review, and report-shaped outputs
+- the main missing layer is deliverable execution: slide schema, `.pptx` generation, and file-level review
 
-#### M1 Desktop Shell
+#### MVP 2: WebApp Generation System
 
-- Build the full-window Desktop shell with outer rail, collapsible middle sidebar, and right workspace stage.
-- Establish `Chat`, `Team`, `Task`, `Projects`, `Usage`, and `Settings` as primary workspaces.
+Input:
 
-Status:
+- a request for a WebApp that satisfies explicit requirements
 
-- largely complete
+Expected outputs:
 
-Priority:
-
-- `P1 maintain`
-
-Required modules:
-
-- Desktop shell layout
-- workspace rail
-- collapsible middle sidebar
-- right-stage workspace renderer
-
-Acceptance:
-
-- Desktop behaves like a full-window client shell
-- navigation no longer depends on centered dashboard-card patterns
-- each pane scrolls internally instead of forcing page-level scroll
-
-Still missing:
-
-- remaining shell polish for spacing, overflow, and cross-panel consistency
-- stronger loading, empty, and error states per workspace
-- future keyboard navigation and power-user interactions
-
-#### M2 Model Connectivity
-
-- Connect Ollama, OpenAI, and Anthropic model routes.
-- Support per-agent route selection, enablement filters, and visible provider/model identity.
-
-Status:
-
-- functionally complete for MVP
-
-Priority:
-
-- `P1 stabilize`
-
-Required modules:
-
-- model gateway
-- route selection UI
-- enabled-model filter
+- requirements clarification
+- technical plan
+- code
+- build result
+- error fixing
+- final runnable project
 
 Acceptance:
 
-- routable agents can be bound to visible provider/model routes
-- local and API model candidates can coexist under one routing surface
-- enabled-model filtering controls what appears in agent selectors
+- `npm install` succeeds
+- `npm build` succeeds
+- the page opens
+- functionality matches the request
+- Reviewer passes the result
 
-Still missing:
+Current position:
 
-- persistent route-selection history
-- stronger provider-health and fallback behavior
-- usage telemetry tied to route and model activity
-- clearer runtime contracts around provider failure modes
+- this is intentionally not the current primary MVP
+- it depends on a stronger execution loop than the project has today
+- it should be treated as the next major MVP after the PPT system proves the runtime on a real deliverable
 
-#### M3 Leader Task Publication
+### Core Roadmap
 
-- Keep the Leader as the main intake surface.
-- Separate natural chat from explicit task publication.
-- Create a clear publication confirmation step before a task enters workflow execution.
+#### R1 Minimal Execution Core
 
-Status:
+Objective:
 
-- complete for MVP
-
-Priority:
-
-- `P1 stabilize`
-
-Required modules:
-
-- Leader direct chat
-- task publication draft
-- publication confirmation flow
-
-Acceptance:
-
-- main tasks originate from explicit Leader publication rather than ordinary chat text
-- publication creates a task record and starts workflow execution consistently
-- users can distinguish normal conversation from task creation
-
-Still missing:
-
-- a fully formalized task-contract schema beyond the current publication card flow
-- milestone-aware publication data persisted into the backend task model
-- stronger linkage between publication output and downstream Planner execution state
-
-#### M4 Fixed Multi-Agent Workflow
-
-- Run the fixed flow:
-  `Leader -> Planner -> Writer -> Reviewer -> Leader Final Response`
-- Keep the workflow inspectable and deterministic.
-- Stabilize retry, review, and human-confirmation behavior across common task types.
-- Upgrade execution from prompt chaining toward contract-based runtime behavior.
-
-Status:
-
-- implemented but still being hardened
+- make the fixed multi-agent loop behave like a real bounded execution system instead of a prompt chain with UI around it
+- provide the minimum execution guarantees required for MVP 1
 
 Priority:
 
-- `P0 current`
+- `P0 now`
 
 Required modules:
 
@@ -631,30 +550,26 @@ Required modules:
 Acceptance:
 
 - legal task-state transitions are enforced
-- role outputs are stable and contract-shaped
-- review, revise, and human-confirmation paths are predictable
-- common text tasks can run end to end without ad hoc flow patches
+- role outputs and failures have stable contracts
+- reviewer rejection routes back into writer revision predictably
+- common text tasks run end to end without ad hoc patches
 
 Still missing:
 
-- a formal state-machine implementation instead of flow logic scattered across orchestrator branches
-- stronger failure contracts between planner, writer, reviewer, and leader stages
-- milestone-aware planning is not yet wired into execution
+- a formal state-machine implementation instead of scattered orchestration branching
+- stronger failure contracts between planner, writer, reviewer, and leader
+- tighter coupling between Leader publication and Planner execution input
 
-#### M5 Task Observability And Recovery
+#### R2 Observable Task Runtime
 
-- Show task state, owner, intermediate outputs, final output, model route, invocation status, and timeline events.
-- Support full retry, failed-step retry, archive, and delete.
-- Improve per-task execution readability without falling back into a dashboard UI.
-- Make failures debuggable as runtime events rather than guessed from chat text.
+Objective:
 
-Status:
-
-- in active development
+- make task progress, failure, retry, and recovery inspectable without relying on chat guesswork or terminal-only debugging
+- make PPT-generation failures inspectable at both text and deliverable stages
 
 Priority:
 
-- `P0 current`
+- `P0 now`
 
 Required modules:
 
@@ -664,10 +579,10 @@ Required modules:
 
 Acceptance:
 
-- evaluator outputs are visible and actionable
-- retry reasons are visible
-- partial rerun is supported in the main task flow
-- execution traces are sufficient to debug failures without relying on chat reconstruction
+- task traces explain why the runtime moved to the next step
+- retry reasons and reviewer outcomes are visible
+- failed-step retry and bounded revision behavior are predictable
+- users can tell where a task is blocked and what changed between attempts
 
 Still missing:
 
@@ -675,14 +590,12 @@ Still missing:
 - clearer blocked, warning, and human-confirmation state explanations
 - better cross-run comparison for retries and revisions
 
-#### M6 Persistence And Project Memory
+#### R3 Persistent Single-User Runtime
 
-- Move from JSON MVP persistence to a stable schema-backed store.
-- Persist direct chats, settings, route history, project state, and future milestone state consistently across restarts.
+Objective:
 
-Status:
-
-- JSON MVP only
+- make the system usable across restarts for one primary user before expanding to more clients or broader product surfaces
+- preserve the working context needed to iteratively produce real deliverables such as PPT decks
 
 Priority:
 
@@ -696,97 +609,24 @@ Required modules:
 Acceptance:
 
 - runtime state survives restart
-- task runs, evaluator outputs, and route history can be restored
-- persistence is no longer limited to a single JSON MVP path
+- tasks, task runs, evaluator outputs, and route history can be restored
+- direct chats and core settings are not limited to transient client memory
 
 Still missing:
 
-- SQLite or Postgres-backed schema storage
+- schema-backed persistence beyond the current JSON baseline
 - full restore for direct chats, settings, and route selections
-- project-level memory and migration support
+- migration support once storage shape evolves
 
-#### M7 Multi-Client Access
+### TODO / Later
 
-- Connect Web to the shared backend.
-- Add lightweight read-only or light-action access from Web and mobile-friendly surfaces.
+These items may still matter, but they are not part of the current solo-developer critical path:
 
-Status:
-
-- not started beyond prototype work
-
-Priority:
-
-- `P2 later`
-
-Required modules:
-
-- backend-connected Web client
-- shared state restoration
-- lightweight mobile-friendly status access
-
-Acceptance:
-
-- Web can inspect shared task and agent state from the same backend as Desktop
-- future mobile-friendly access can reuse the same runtime state
-
-Still missing:
-
-- the Web client is still prototype-level
-- no mobile check-in surface exists yet
-- no multi-client sync polish or auth boundary has been defined
-
-#### M8 AI Execution System
-
-- Move beyond "task generation" into real execution against project objects, documents, modules, and future workspace targets.
-- Make outputs traceable, recoverable, and auditable as part of a real execution system.
-
-Status:
-
-- future direction
-
-Priority:
-
-- `P1 strategic`
-
-Required modules:
-
-- `P0 Runtime State Machine`
-- `P1 Role Contract System`
-- `P2 Evaluation Engine`
-- `P3 Convergence Engine`
-- `P4 Context Slicing Layer`
-- `P5 Runtime Trace Model`
-- `P6 Persistence Schema Upgrade`
-- `P7 Benchmark Harness`
-
-Acceptance:
-
-- the runtime can be evaluated as a system rather than as a prompt chain
-- baseline single-pass generation can be compared against runtime execution
-- execution cost, retries, traces, and output quality can be measured together
-
-Still missing:
-
-- real execution targets have not been modeled yet
-- benchmark tasks do not yet prove runtime advantage over single-pass generation
-- control, evaluation, and convergence are not yet complete enough to call this a full execution runtime
-
-### Immediate Next Focus
-
-#### Phase A: Runtime Hardening
-
-- Add typed role IO and contract-based execution boundaries.
-- Define per-role failure contracts, not only success payloads.
-- Introduce stricter context slicing for Leader, Planner, Writer, and Reviewer.
-
-#### Phase B: Executable Evaluation Loop
-
-- Combine LLM review with programmatic validation.
-- Make evaluator outputs directly drive next actions in the runtime.
-- Strengthen state-aware retry and partial rerun behavior.
-
-#### Phase C: Benchmark And Trace
-
-- Pick one benchmark task domain such as document generation.
-- Compare baseline single-pass generation against AES runtime execution.
-- Add cost tracking and execution trace UI so the runtime can be evaluated as a system.
+- Web backend integration
+- mobile-friendly status access
+- live usage telemetry and richer analytics
+- project-memory expansion beyond the current task core
+- Leader-controlled document editing
+- full WebApp-generation execution loop
+- benchmark harness for broader runtime evaluation
+- deeper shell polish, keyboard shortcuts, and advanced power-user interaction

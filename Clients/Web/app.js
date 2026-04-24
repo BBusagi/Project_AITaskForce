@@ -7,7 +7,7 @@ const webState = {
       name: "Leader",
       role: "总控编排",
       status: "working",
-      currentTask: "多 Agent 协作工作台 MVP",
+      currentTask: "多 Agent 协作工作台",
       skills: ["routing", "synthesis", "task-control"],
     },
     {
@@ -35,11 +35,11 @@ const webState = {
   tasks: [
     {
       id: "task-001",
-      title: "多 Agent 协作工作台 MVP",
+      title: "多 Agent 协作工作台",
       priority: "high",
       phase: "reviewing",
       thread: [
-        { role: "user", name: "User", time: "09:12", text: "请整理多 Agent 协作系统的 MVP 前端结构。" },
+        { role: "user", name: "User", time: "09:12", text: "请整理多 Agent 协作系统的 Web 工作区结构。" },
         {
           role: "leader",
           name: "Leader",
@@ -50,7 +50,7 @@ const webState = {
       subtasks: [
         { title: "定义页面结构", owner: "Planner", status: "completed", text: "三栏布局，包含 Team、Workspace、Timeline。" },
         { title: "产出界面文案", owner: "Writer", status: "completed", text: "补齐 Hero、任务输入、Leader 对话流。" },
-        { title: "检查 MVP 边界", owner: "Reviewer", status: "running", text: "确认不引入动态自治或复杂队列。" },
+        { title: "检查当前范围边界", owner: "Reviewer", status: "running", text: "确认不引入动态自治或复杂队列。" },
       ],
       timeline: [
         { label: "task_created", time: "09:12", text: "任务创建并分配给 Leader。" },
@@ -383,7 +383,7 @@ webLoadDemoBtn.addEventListener("click", () => {
   document.getElementById("web-task-title").value = "将需求文档整理成协作工作台方案";
   document.getElementById("web-task-priority").value = "high";
   document.getElementById("web-task-input").value =
-    "请为多 Agent 协作系统设计一个前端 Web MVP，要求体现任务输入、Agent 状态、阶段流转、时间线和历史任务。";
+    "请为多 Agent 协作系统设计一个前端 Web 工作区，要求体现任务输入、Agent 状态、阶段流转、时间线和历史任务。";
 });
 
 renderWebAgents();

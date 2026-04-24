@@ -1,8 +1,8 @@
 # AI Task Force Server
 
-Minimal ATF backend with:
+JSON-backed ATF backend with:
 
-- in-memory task store
+- JSON-backed task store
 - fixed orchestration flow
 - provider-aware model gateway for Ollama, OpenAI, and Anthropic
 - task, event, message, and agent APIs

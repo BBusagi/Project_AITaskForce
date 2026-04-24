@@ -2,7 +2,7 @@
   "name": "ai-task-force-server",
   "version": "0.1.0",
   "private": true,
-  "description": "Minimal ATF backend with in-memory orchestration and Ollama integration",
+  "description": "ATF server with JSON-backed orchestration, model routing, and Ollama integration",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js"

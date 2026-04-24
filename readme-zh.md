@@ -1,6 +1,6 @@
 # AI Task Force
 
-AI Task Force 是一个面向文本任务的多智能体工作区 MVP。
+AI Task Force 是一个面向有界执行任务的结构化 AI 团队工作区。
 
 它当前不是要先做成通用 autonomous agent platform，而是先把一个固定、可检查、可验证的协作流程做成真实可用的产品体验：
 
@@ -19,7 +19,7 @@ User -> Leader -> Planner -> Writer -> Reviewer -> Leader Final Response
 ## 仓库结构
 
 - `Clients/Web`
-  浏览器端 workspace MVP，用于任务输入、agent 结构展示、timeline 和 task history。
+  浏览器端 workspace 客户端，用于任务输入、agent 结构展示、timeline 和 task history。
 - `Clients/Desktop`
   Electron 风格桌面端，包含外侧 rail 导航、中间 sidebar、右侧主工作区，以及 `Chat`、`Team`、`Task`、`Projects`、`Usage`、`Settings`。
 - `Server`
@@ -31,7 +31,7 @@ User -> Leader -> Planner -> Writer -> Reviewer -> Leader Final Response
 
 目前已经实现：
 
-- 共享产品模型下的静态 Web MVP。
+- 共享 task / event 模型下的静态 Web workspace shell。
 - 全窗口 Desktop shell，采用外侧 rail、中栏树结构、右侧工作区的桌面应用布局。
 - Desktop 中的 `Chat`、`Team`、`Task`、`Projects`、`Usage`、`Settings` 工作区。
 - Leader-first 的聊天入口，支持自然协商和独立的任务发布动作。
@@ -61,7 +61,7 @@ User -> Leader -> Planner -> Writer -> Reviewer -> Leader Final Response
   retry only the failed step
   archive
   delete
-- Review contract MVP，包括：
+- Review contract 基础能力，包括：
   固定 rubric
   结构化 Writer submission
   machine-readable Reviewer output
@@ -75,7 +75,7 @@ User -> Leader -> Planner -> Writer -> Reviewer -> Leader Final Response
   response size
   request status
 - 后端终端中的 chat 请求与关键 task lifecycle 日志输出。
-- 面向 tasks、subtasks、events、messages、archived state、task numbering 的 JSON persistence MVP。
+- 面向 tasks、subtasks、events、messages、archived state、task numbering 的 JSON 持久化基线。
 - 当前仍为 mock 的 Projects 与 Usage workspace。
 
 尚未实现：
@@ -91,7 +91,7 @@ User -> Leader -> Planner -> Writer -> Reviewer -> Leader Final Response
 
 ## 产品问题总结
 
-AI Task Force 把反复试错视为产品问题，而不只是模型质量问题。当前 MVP 主要聚焦两个问题。
+AI Task Force 把反复试错视为产品问题，而不只是模型质量问题。当前系统主要聚焦两个问题。
 
 ### Problem 1: 执行环不可见
 
@@ -120,7 +120,7 @@ Review 层需要一个更正式的 contract：
 - 只因 blocking defect 拒绝，而不是因为细枝末节的风格偏好
 - 有界重试：最多 2 次 automated review，之后升级到 `human_confirmation`
 
-当前 MVP 的实现形态：
+当前实现形态：
 
 ```text
 Writer submission
@@ -334,7 +334,7 @@ retry 不能只是泛化循环，runtime 还需要：
 
 作用：
 
-- 把 JSON MVP persistence 升级成 schema-backed runtime store
+- 把当前 JSON 持久化基线升级成 schema-backed runtime store
 
 要做什么：
 
@@ -438,363 +438,164 @@ http://localhost:8000/Clients/Web/
 
 ## Roadmap
 
-### 当前所处位置
+### 开发原则
+核心规则是：
+- 只优先做能证明产品核心理念的最小执行框架
+- 不把次级客户端或扩展型产品面放进当前主线
+- 非阻塞扩展项统一下放到 TODO，而不是占用当前 roadmap 主体
 
-当前项目大致位于：
-
-- `M3 Leader Task Publication`
-- `M4 Fixed Multi-Agent Workflow`
-- `M5 Task Observability And Recovery`
-
-`M1` 和 `M2` 的大部分内容已经完成。`M6` 目前只有 JSON-based MVP。`M7` 和 `M8` 仍是后续阶段。
-
-### Milestone 结构
-
-从现在开始，milestone 不应该再和工程模块分成两套平行结构。
-
-更合理的结构应该是：
-
+对这个项目来说，真正定义产品的最小闭环是：
 ```text
-Milestone
--> Objective
--> Priority
--> Required Modules
--> Acceptance
--> Still Missing
+Leader -> Planner -> Writer -> Reviewer -> Final
 ```
 
-也就是说：
+### 当前所处位置
 
-- milestone 定义产品目标
-- priority 定义当前推进优先级
-- module 定义为达成目标所需的工程能力
-- acceptance 定义什么时候可以认为该 milestone 已达到
+当前项目已经有：
 
-### 什么叫“MVP 层面已可用”
+- 可用的 Desktop shell
+- 可切换的模型路由
+- Leader 任务发布入口
+- 能跑通的固定 workflow slice
 
-当 roadmap 里写某个 milestone “MVP 层面已可用”时，并不代表这一块已经完全完成。
+当前主缺口已经不是界面外壳，而是执行内核的加固。
 
-它表示：
+### 当前 MVP 目标
 
-- 主用户路径已经存在
-- 功能可以端到端跑通
-- 已经适合 demo 和小范围真实测试
+#### MVP 1：PPT 生成系统
 
-它不表示：
+输入：
+- 主题
+- 目标受众
+- 页数
+- 风格
+- 语言
 
-- production-grade persistence 已完成
-- failure handling 已完全加固
-- cross-client state 已完整打通
-- 每个边界情况都已经有稳定 runtime contract
-
-### Milestone Map
-
-#### M0 Product Definition
-
-- 把 AI Task Force 定义为结构化的 AI team workspace，而不是通用 autonomous agent platform。
-- 固定 Desktop、Web、Server 和 `Agents.md` 之间共享的产品语言。
-
-状态：
-
-- 基本完成
-
-优先级：
-
-- `P0 基础`
-
-所需模块：
-
-- 统一产品词汇
-- 统一 task / event 模型
-- 统一 routing 语义
+期望输出：
+- PPT 大纲
+- 每页文案
+- 演讲稿
+- 最终 `.pptx`
+- review 报告
 
 验收标准：
+- 结构完整
+- 页数正确
+- 语气符合要求
+- 内容无明显矛盾
+- 系统能够导出 `.pptx`
 
-- Desktop、Web、Server 和文档描述的是同一个有边界的系统
-- 项目被明确表述为 AI workspace / runtime，而不是自由形态 autonomous platform
+当前判断：
+- 这是当前主 MVP
+- 现有系统已经覆盖 intake、planning、writing、review 和报告型输出
+- 当前主要缺口在真实交付物层：slide schema、`.pptx` 生成、文件级 review
 
-仍然缺少：
+#### MVP 2：WebApp 生成系统
 
-- 清理仍带有早期 MVP 口径的过时描述
-- 随执行模型演进持续同步 Desktop、Web 与文档
+输入：
+- 一个符合明确要求的 WebApp 请求
 
-#### M1 Desktop Shell
-
-- 构建全窗口 Desktop shell，形成 outer rail、collapsible middle sidebar 和 right workspace stage。
-- 将 `Chat`、`Team`、`Task`、`Projects`、`Usage`、`Settings` 作为主工作区。
-
-状态：
-
-- 基本完成
-
-优先级：
-
-- `P1 维护`
-
-所需模块：
-
-- Desktop shell layout
-- workspace rail
-- collapsible middle sidebar
-- right-stage workspace renderer
+期望输出：
+- 需求整理
+- 技术方案
+- 代码
+- 构建结果
+- 错误修复
+- 最终可运行项目
 
 验收标准：
+- `npm install` 成功
+- `npm build` 成功
+- 页面可打开
+- 功能符合需求
+- Reviewer pass
 
-- Desktop 表现为真正的 full-window client shell
-- 导航不再依赖居中的 dashboard-card 布局
-- 各栏位滚动发生在各自内部，而不是整页滚动
+当前判断：
+- 这不是当前的主 MVP
+- 它依赖比当前更强的执行闭环
+- 更适合作为 PPT 生成系统跑通后的下一阶段 MVP
 
-仍然缺少：
+### 核心 Roadmap
 
-- spacing、overflow、cross-panel consistency 的剩余打磨
-- 各 workspace 更清晰的 loading / empty / error 状态
-- 后续的键盘导航和 power-user 交互
+#### R1 最小执行内核
 
-#### M2 Model Connectivity
-
-- 接入 Ollama、OpenAI、Anthropic 路由。
-- 支持按 agent 选择 route、启用过滤，并在 UI 中明确显示 provider / model 身份。
-
-状态：
-
-- MVP 层面已可用
-
-优先级：
-
-- `P1 稳定化`
-
-所需模块：
-
-- model gateway
-- route selection UI
-- enabled-model filter
-
-验收标准：
-
-- 可路由的 agent 能绑定到明确可见的 provider / model route
-- 本地模型与 API 模型可以在同一套 routing surface 下共存
-- enabled-model filtering 能控制 agent 下拉中的候选模型
-
-仍然缺少：
-
-- route-selection history 的持久化
-- 更强的 provider health 与 fallback 行为
-- 与 route / model activity 绑定的 usage telemetry
-- 更明确的 provider failure runtime contract
-
-#### M3 Leader Task Publication
-
-- 保持 Leader 为主要 intake surface。
-- 区分自然对话与正式任务发布。
-- 在任务进入 workflow 前提供明确的 publication confirmation。
-
-状态：
-
-- MVP 层面已完成
+目标：
+- 让固定多智能体链路更像真正的 bounded execution system，而不是外面套了 UI 的 prompt chain
+- 提供 MVP 1 所需的最小执行保证
 
 优先级：
-
-- `P1 稳定化`
-
-所需模块：
-
-- Leader direct chat
-- task publication draft
-- publication confirmation flow
-
-验收标准：
-
-- 主任务必须来自显式的 Leader publication，而不是普通聊天文本
-- publication 会稳定创建 task record 并启动 workflow
-- 用户能明确区分普通对话和任务创建
-
-仍然缺少：
-
-- 超越当前 publication card flow 的正式 task-contract schema
-- 持久化到后端 task model 的 milestone-aware publication data
-- publication output 与后续 Planner execution state 之间更强的结构连接
-
-#### M4 Fixed Multi-Agent Workflow
-
-- 跑通固定流程：
-  `Leader -> Planner -> Writer -> Reviewer -> Leader Final Response`
-- 保持 workflow 可检查、确定性强。
-- 稳定 retry、review 和 human-confirmation 在常见文本任务下的行为。
-- 让执行从 prompt chaining 进一步升级为 contract-based runtime behavior。
-
-状态：
-
-- 已实现，但还在继续加固
-
-优先级：
-
-- `P0 当前核心`
+- `P0 当前立即做`
 
 所需模块：
-
 - `P0 Runtime State Machine`
 - `P1 Role Contract System`
 
 验收标准：
-
 - 合法 task-state transition 被严格约束
-- role output 结构稳定并符合 contract
-- review、revise、human-confirmation 路径可预测
+- role output 与 failure 都有稳定 contract
+- reviewer 拒绝后会可预测地回到 writer 修订
 - 常见文本任务可以不依赖临时补丁稳定跑通
 
 仍然缺少：
-
-- 正式的 state machine，而不是分散在 orchestrator 分支里的流程逻辑
+- 正式的 state machine，而不是分散的 orchestrator 分支逻辑
 - planner、writer、reviewer、leader 之间更强的 failure contract
-- milestone-aware planning 还没有真正接入执行链路
+- 更紧密的 Leader publication 到 Planner execution 的输入连接
 
-#### M5 Task Observability And Recovery
+#### R2 可观察任务运行时
 
-- 让 task state、owner、intermediate outputs、final output、model route、invocation status、timeline events 可见。
-- 支持 full retry、failed-step retry、archive、delete。
-- 在不回退成 dashboard UI 的前提下提升每个 task 的执行可读性。
-- 让失败能够被当作 runtime event 调试，而不是只能从 chat 文本中猜测。
-
-状态：
-
-- 正在持续开发中
+目标：
+- 让任务进展、失败、重试、恢复都可以被检查，而不是依赖聊天猜测或终端日志猜测
+- 让 PPT 生成在文本层和交付物层的失败都可观察
 
 优先级：
-
-- `P0 当前核心`
+- `P0 当前立即做`
 
 所需模块：
-
 - `P2 Evaluation Engine`
 - `P3 Convergence Engine`
 - `P5 Runtime Trace Model`
 
 验收标准：
-
-- evaluator output 可见且可驱动动作
-- retry reason 可见
-- 主任务流支持 partial rerun
-- execution trace 足以支持 debug，而不需要从聊天文本反推
+- task trace 能解释 runtime 为什么进入下一步
+- retry reason 和 reviewer outcome 对用户可见
+- failed-step retry 与有界 revision 行为可预测
+- 用户能看懂任务卡在哪，以及多轮尝试之间发生了什么变化
 
 仍然缺少：
-
 - 可持久化、可查询的 trace model，而不是主要依赖终端 debug 输出
 - 更清楚的 blocked / warning / human-confirmation 状态解释
 - 更好的多轮 retry / revision 对比能力
 
-#### M6 Persistence And Project Memory
+#### R3 面向单用户的持久运行时
 
-- 从 JSON MVP persistence 升级到稳定的 schema-backed store。
-- 一致地持久化 direct chats、settings、route history、project state，以及未来的 milestone state。
-
-状态：
-
-- 目前只有 JSON MVP
+目标：
+- 在扩展更多客户端和更多产品表面之前，先让系统对一个主要用户在重启后仍然可用
+- 保留生成真实交付物所需的上下文和运行状态
 
 优先级：
-
 - `P0 下一阶段`
 
 所需模块：
-
 - `P5 Runtime Trace Model`
 - `P6 Persistence Schema Upgrade`
 
 验收标准：
-
 - runtime state 在重启后可恢复
-- task run、evaluator output、route history 可以恢复
-- persistence 不再局限于单一路径的 JSON MVP
+- tasks、task runs、evaluator outputs、route history 可以恢复
+- direct chats 和核心 settings 不再只存在于临时 client memory
 
 仍然缺少：
-
-- SQLite 或 Postgres-backed schema storage
+- 超越当前 JSON baseline 的 schema-backed persistence
 - direct chats、settings、route selections 的完整恢复
-- project-level memory 与 migration support
+- storage shape 演进后的 migration support
 
-#### M7 Multi-Client Access
-
-- 让 Web 接入共享后端。
-- 添加轻量只读或轻操作的 Web / mobile-friendly 访问层。
-
-状态：
-
-- 除 prototype 外尚未开始
-
-优先级：
-
-- `P2 后续`
-
-所需模块：
-
-- backend-connected Web client
-- shared state restoration
-- lightweight mobile-friendly status access
-
-验收标准：
-
-- Web 能从与 Desktop 相同的 backend 查看共享 task / agent state
-- 未来 mobile-friendly access 可以复用同一套 runtime state
-
-仍然缺少：
-
-- Web client 目前仍是 prototype 级别
-- 还没有 mobile check-in surface
-- 还没有多端同步打磨与 auth boundary
-
-#### M8 AI Execution System
-
-- 从 “task generation” 进一步走向真正的执行系统。
-- 让系统作用于 project objects、documents、modules 和未来的 workspace targets。
-- 让输出可追踪、可恢复、可审计。
-
-状态：
-
-- 未来方向
-
-优先级：
-
-- `P1 战略方向`
-
-所需模块：
-
-- `P0 Runtime State Machine`
-- `P1 Role Contract System`
-- `P2 Evaluation Engine`
-- `P3 Convergence Engine`
-- `P4 Context Slicing Layer`
-- `P5 Runtime Trace Model`
-- `P6 Persistence Schema Upgrade`
-- `P7 Benchmark Harness`
-
-验收标准：
-
-- runtime 可以作为系统来评估，而不只是作为 prompt chain 展示
-- baseline single-pass generation 可以与 runtime execution 正式比较
-- execution cost、retry、trace、output quality 可以一起被测量
-
-仍然缺少：
-
-- 真实 execution targets 还没有建模
-- benchmark task 还没有证明 runtime 相比 single-pass generation 的优势
-- control、evaluation、convergence 还不够完整，暂时不能称为完整 execution runtime
-
-### 当前下一阶段重点
-
-#### Phase A: Runtime Hardening
-
-- 增加 typed role IO 与 contract-based execution boundary。
-- 为每个角色定义 failure contract，而不仅仅是 success payload。
-- 为 Leader、Planner、Writer、Reviewer 引入更严格的 context slicing。
-
-#### Phase B: Executable Evaluation Loop
-
-- 将 LLM review 与 programmatic validation 结合。
-- 让 evaluator output 直接驱动 runtime 的 next action。
-- 强化 state-aware retry 与 partial rerun。
-
-#### Phase C: Benchmark And Trace
-
-- 选择一个 benchmark task domain，例如 document generation。
-- 对比 baseline single-pass generation 与 AES runtime execution。
-- 增加 cost tracking 与 execution trace UI，把 runtime 当作系统来评估。
+### TODO / Later
+这些事情依然有价值，但不属于当前单人开发的关键路径：
+- Web 后端接入
+- mobile-friendly 状态查看
+- live usage telemetry 与更丰富的 analytics
+- 超出当前 task core 的 project-memory 扩展
+- Leader-controlled document editing
+- 完整的 WebApp 生成执行闭环
+- 更完整的 benchmark harness
+- 更深的 shell polish、keyboard shortcuts 与 power-user 交互

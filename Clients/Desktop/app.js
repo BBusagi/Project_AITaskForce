@@ -823,8 +823,8 @@ const state = {
           "zh-CN": "Web 客户端",
         },
         summary: {
-          en: "Browser workspace MVP focused on the shared task model and timeline rendering.",
-          "zh-CN": "浏览器端 MVP，重点在共享任务模型和时间线展示。",
+          en: "Browser workspace focused on the shared task model and timeline rendering.",
+          "zh-CN": "浏览器端工作区，重点在共享任务模型和时间线展示。",
         },
         stage: {
           en: "Iteration",
