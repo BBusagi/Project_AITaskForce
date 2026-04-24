@@ -41,7 +41,7 @@ This repository currently has two frontend clients under one shared product mode
 
 The repository now also includes:
 
-- `Server` for a minimal in-memory backend and Ollama integration path
+- `Server` for a minimal JSON-backed backend, model gateway, and fixed orchestration path
 
 Both clients should share:
 
@@ -97,11 +97,158 @@ AI Task Force should solve this by making the work loop observable:
 
 The product should reduce blind prompting and replace it with inspectable coordination.
 
-## 4. Product Signature
+## 4. Execution Runtime Framing
+
+AI Task Force should be understood as more than a multi-agent workflow demo.
+
+The intended system shape is:
+
+> AI Execution Runtime = deterministic shell for probabilistic compute
+
+In this framing:
+
+- LLMs are compute units
+- workflow steps are bounded search operations
+- the runtime is responsible for control, evaluation, convergence, and observability
+
+This means the product should evolve toward a runtime system, not toward an unbounded collection of prompts and agents.
+
+### 4.1 Runtime Pillars
+
+The target execution system must cover these five pillars:
+
+- Generation
+- Control
+- Evaluation
+- Convergence
+- Observability
+
+### 4.2 Current Engineering Gaps
+
+The current architecture direction is correct, but three engineering closures are still missing.
+
+#### Control Layer Gap
+
+The runtime must move beyond loose prompt-shaped IO.
+
+Required direction:
+
+- typed role IO
+- explicit input, output, and failure contracts per role
+- context slicing rules so each role only sees the minimum required state
+
+#### Evaluation Layer Gap
+
+Reviewer judgement alone is not enough.
+
+Required direction:
+
+- evaluator outputs must directly drive runtime behavior
+- rule-based and programmatic validation should complement LLM judgement
+- the system should support multi-evaluator composition such as LLM reviewer + rule validator + regression checker
+
+#### Convergence Layer Gap
+
+Retries must become runtime-aware, not generic loops.
+
+Required direction:
+
+- state-aware retries that change the next input based on prior failure
+- partial rerun so only the failed segment is recomputed
+- explicit search policy for exploring and refining candidate outputs
+
+### 4.3 Minimum Executable System
+
+The project already has working task slices, such as end-to-end multilingual summarization through the current fixed workflow.
+
+That is not yet the same thing as a reusable execution runtime.
+
+For implementation purposes, the minimum executable system should mean:
+
+- a state machine that explicitly defines valid task states and legal transitions
+- an evaluation loop that can inspect output and decide the next runtime action
+
+The distinction matters:
+
+- a working vertical slice proves that one workflow can run
+- a minimum executable runtime proves that workflow execution has an enforceable core
+
+### 4.4 Concrete Runtime Modules
+
+The next engineering modules should be treated as explicit build targets.
+
+#### P0 Runtime State Machine
+
+Responsibilities:
+
+- define task states and legal transitions
+- define transition triggers and failure exits
+- emit stable runtime events on every state change
+
+#### P1 Role Contract System
+
+Responsibilities:
+
+- define typed input contracts per role
+- define typed output contracts per role
+- define failure contracts per role
+
+#### P2 Evaluation Engine
+
+Responsibilities:
+
+- support LLM reviewer evaluation
+- support rule-based validation
+- support regression checks
+- produce machine-readable evaluator results that can drive runtime behavior
+
+#### P3 Convergence Engine
+
+Responsibilities:
+
+- enforce retry budgets
+- support partial rerun
+- change retry input based on prior failure state
+- manage search and refinement strategy
+
+#### P4 Context Slicing Layer
+
+Responsibilities:
+
+- expose only minimum-required context to each role
+- reduce role coupling caused by oversized context
+- keep role prompts aligned with runtime state boundaries
+
+#### P5 Runtime Trace Model
+
+Responsibilities:
+
+- assign run ids
+- store transition records
+- store evaluator outcomes
+- store retry reasons
+- store route, duration, and execution metadata
+
+#### P6 Persistence Schema Upgrade
+
+Responsibilities:
+
+- replace JSON-only persistence with schema-backed runtime storage
+- normalize tasks, task runs, task states, evaluator results, runtime events, and route history
+
+#### P7 Benchmark Harness
+
+Responsibilities:
+
+- compare single-pass baseline generation against AES runtime execution
+- track quality, retries, latency, and cost
+- make runtime improvements measurable
+
+## 5. Product Signature
 
 The current Desktop prototype has surfaced a product pattern that should be treated as a feature, not just a temporary layout choice.
 
-### 4.1 Overview-First Team Workspace
+### 5.1 Overview-First Team Workspace
 
 `Team` should open to a workspace-level `Overview` first.
 
@@ -115,7 +262,7 @@ Why this matters:
 
 This pattern should be preserved as the product evolves.
 
-### 4.2 Desktop Shell Model
+### 5.2 Desktop Shell Model
 
 The Desktop client should feel like a real client app shell, closer to Slack or VS Code than to a dashboard landing page.
 
@@ -129,7 +276,7 @@ Key shell rules:
 - no centered dashboard container
 - no outer rounded card wrapping the whole app
 
-### 4.3 Operational Workspaces Beyond Chat
+### 5.3 Operational Workspaces Beyond Chat
 
 The Desktop client is no longer only a chat surface.
 
@@ -143,7 +290,7 @@ The shell now includes product-level operational workspaces:
 
 This is intentional. The product should expose not only conversation, but also coordination, project context, and model consumption.
 
-### 4.4 Agent Identity And Runtime Identity
+### 5.4 Agent Identity And Runtime Identity
 
 Every agent has two identities:
 
@@ -152,7 +299,7 @@ Every agent has two identities:
 
 The UI and backend prompts should keep these separate but visible together. If a user asks an agent who it is or what model it is using, the answer should include both the ATF role and the current provider/model route.
 
-## 5. MVP Scope
+## 6. MVP Scope
 
 ### In Scope
 
@@ -183,7 +330,7 @@ The UI and backend prompts should keep these separate but visible together. If a
 - arbitrary workflow builder
 - production analytics pipeline
 
-## 6. Agent Architecture
+## 7. Agent Architecture
 
 ### Leader
 
@@ -248,7 +395,7 @@ Recommended model:
 
 - local Qwen via Ollama
 
-## 7. Workflow Model
+## 8. Workflow Model
 
 MVP should use a fixed orchestration flow:
 
@@ -269,11 +416,13 @@ Writer Revision
 -> Leader Final Response
 ```
 
-Revision loop limit:
+Revision loop shape:
 
-- max 1 retry in MVP
+- full review on attempt 1
+- scoped revision review on attempt 2
+- escalate to `human_confirmation` after the bounded automated attempts
 
-## 8. Routing Strategy
+## 9. Routing Strategy
 
 ### Remote GPT API
 
@@ -300,7 +449,7 @@ Use for:
 - every direct chat should follow the selected route for that agent
 - route selection and enabled model candidates must remain visible in Settings and Team
 
-## 9. Shared Data Model
+## 10. Shared Data Model
 
 Shared domain objects still center on:
 
@@ -321,9 +470,9 @@ The frontend may add client-local presentation models for:
 
 These presentation models should not replace the core task model.
 
-## 10. Frontend Client Split
+## 11. Frontend Client Split
 
-### 10.1 Web
+### 11.1 Web
 
 The Web client remains the browser workspace MVP.
 
@@ -335,7 +484,7 @@ Primary focus:
 - task detail inspection
 - read-only project and agent status views in later phases
 
-### 10.2 Desktop
+### 11.2 Desktop
 
 The Desktop client is a dialogue-first shell, but it is no longer limited to three panels.
 
@@ -355,7 +504,7 @@ Current Desktop shell expectations:
 - use collapsible middle sidebar as the workspace tree
 - render the selected content in the right-side stage
 
-### 10.3 Desktop Workspace Requirements
+### 11.3 Desktop Workspace Requirements
 
 #### Chat
 
@@ -430,25 +579,28 @@ Should contain:
 - API LLM model enablement
 - default and enabled model route visibility
 
-## 11. Current Prototype Status
+## 12. Current Prototype Status
 
 ### Implemented Now
 
 - repository split between Web and Desktop
 - minimal backend under `Server`
 - static Web MVP
-- Electron-ready Desktop shell prototype
+- Electron-style Desktop shell
 - full-window Desktop shell layout
 - outer rail navigation
 - collapsible middle sidebar
 - right-side workspace stage
 - Team overview plus agent drilldown pattern
+- task workspace with overview, team timeline, and per-task detail views
+- per-task stage flow in task detail views
 - project workspace prototype
 - usage workspace prototype
 - theme switching
 - English default UI
 - optional Simplified Chinese UI
-- in-memory task API and orchestration flow
+- JSON-backed task API and persistence MVP
+- fixed orchestrator execution through real model calls
 - Ollama-backed writer route
 - `POST /api/chat` direct chat endpoint
 - Ollama direct chat through native `/api/chat`
@@ -457,35 +609,324 @@ Should contain:
 - enabled-model filtering for agent model dropdowns
 - per-agent model route display in Team overview and agent detail
 - backend request/response/error logging for direct chat
+- backend task lifecycle logging and model invocation visibility
 - Desktop polling against backend task snapshots when the API is available
+- retry task, retry failed step, archive, and delete actions
 
 ### Not Implemented Yet
 
-- persistent task storage
-- full orchestrator execution through real model calls
+- SQLite-backed persistence and migration tooling
+- persistent direct chat history across the whole product surface
+- fully contract-based role IO and failure handling
+- hybrid evaluation stack with rule validators beyond LLM review
+- stronger partial rerun and search-policy execution
 - live usage telemetry
 - full backend integration in the Web client
 - synchronized shared state across both clients
 - mobile status client
 - safe document editing workflow through Leader
 
-## 12. Roadmap
+## 13. Roadmap
 
-### 12.1 Observability Roadmap
+### 13.1 M0 Product Definition
 
-- Persist tasks, subtasks, timeline events, direct chat messages, route selections, and validation outcomes.
-- Make every agent action inspectable with owner, input, output, model route, status, and timestamp.
-- Add validation surfaces for reviewer checks, failed assumptions, retry reasons, and final approval.
-- Track model usage by provider, model, agent, task, project, and module.
+- Define AI Task Force as a structured AI team workspace for bounded execution.
+- Keep the product centered on inspectability, routing clarity, and task ownership.
+- Avoid drifting into a free-form autonomous agent platform too early.
 
-### 12.2 Client Roadmap
+Status:
 
-- Connect the Web client to the same backend used by Desktop.
-- Add read-only Web views for agent status, project status, task timelines, and recent outputs.
-- Add a lightweight mobile client for checking agents, projects, development stage, open bugs, task progress, and recent outputs.
-- Keep Desktop as the primary control surface for deeper task and model routing work.
+- mostly complete
 
-### 12.3 Leader-Controlled Editing Roadmap
+Priority:
+
+- `P0 foundation`
+
+Required modules:
+
+- shared product vocabulary
+- shared task model
+- shared routing language
+
+Acceptance:
+
+- Desktop, Web, Server, and docs describe the same system boundaries
+- the product is clearly framed as a bounded AI workspace, not a general autonomous platform
+
+Still missing:
+
+- remove leftover MVP-era wording that conflicts with runtime framing
+- keep product language aligned across Desktop, Web, Server, and docs as execution evolves
+
+### 13.2 M1 Desktop Shell
+
+- Keep the Desktop client as a full-window shell, not a centered dashboard.
+- Preserve outer rail navigation, collapsible middle sidebar, and right workspace stage.
+- Keep `Chat`, `Team`, `Task`, `Projects`, `Usage`, and `Settings` as first-class workspaces.
+
+Status:
+
+- largely complete
+
+Priority:
+
+- `P1 maintain`
+
+Required modules:
+
+- Desktop shell layout
+- workspace rail
+- collapsible middle sidebar
+- right-stage workspace renderer
+
+Acceptance:
+
+- Desktop behaves like a full-window client shell
+- navigation no longer depends on dashboard-card patterns
+- each pane scrolls internally instead of forcing page-level scroll
+
+Still missing:
+
+- remaining shell polish for spacing, overflow, and cross-panel consistency
+- stronger loading, empty, and error states per workspace
+- future keyboard navigation and power-user interactions
+
+### 13.3 M2 Model Connectivity
+
+- Support Ollama, OpenAI, and Anthropic under one routing model.
+- Keep provider/model identity visible in the UI.
+- Allow per-agent route selection and enablement filtering.
+
+Status:
+
+- functionally complete for MVP
+
+Priority:
+
+- `P1 stabilize`
+
+Required modules:
+
+- model gateway
+- route selection UI
+- enabled-model filter
+
+Acceptance:
+
+- routable agents can be bound to visible provider/model routes
+- local and API model candidates can coexist under one routing surface
+- enabled-model filtering controls what appears in agent selectors
+
+Still missing:
+
+- persistent route-selection history
+- stronger provider-health and fallback behavior
+- usage telemetry tied to route and model activity
+- clearer runtime contracts for provider failure modes
+
+### 13.4 M3 Leader Task Publication
+
+- Make the Leader the main intake surface.
+- Separate natural conversation from explicit task publication.
+- Require a publication confirmation step before task execution begins.
+
+Status:
+
+- complete for MVP
+
+Priority:
+
+- `P1 stabilize`
+
+Required modules:
+
+- Leader direct chat
+- task publication draft
+- publication confirmation flow
+
+Acceptance:
+
+- main tasks originate from explicit Leader publication, not ordinary chat text
+- publication creates a task record and starts the workflow consistently
+- users can distinguish normal conversation from task creation
+
+Still missing:
+
+- a formal task-contract schema beyond the current publication card flow
+- milestone-aware publication data persisted into the backend task model
+- stronger structure between publication output and downstream Planner execution state
+
+### 13.5 M4 Fixed Multi-Agent Workflow
+
+- Run the fixed orchestration loop:
+  `Leader -> Planner -> Writer -> Reviewer -> Leader Final Response`
+- Keep orchestration deterministic and inspectable.
+- Stabilize retry, review, and human-confirmation behavior across common text-task patterns.
+- Move from prompt chaining toward contract-based runtime execution.
+
+Status:
+
+- implemented but still being hardened
+
+Priority:
+
+- `P0 current`
+
+Required modules:
+
+- `P0 Runtime State Machine`
+- `P1 Role Contract System`
+
+Acceptance:
+
+- legal workflow transitions are enforced
+- role outputs are contract-shaped
+- review, revise, and human-confirmation paths are deterministic enough to reuse across common task types
+
+Still missing:
+
+- a formal state-machine implementation instead of flow logic scattered across orchestrator branches
+- stronger failure contracts between planner, writer, reviewer, and leader stages
+- milestone-aware planning is not yet wired into execution
+
+### 13.6 M5 Task Observability And Recovery
+
+- Make task state, owner, route, invocation status, intermediate outputs, final output, and timeline visible.
+- Support full retry, failed-step retry, archive, and delete.
+- Distinguish clearly between in-progress, warning, failed, and human-confirmation states.
+- Make runtime failures debuggable as first-class events rather than inferred from chat text.
+
+Status:
+
+- in active development
+
+Priority:
+
+- `P0 current`
+
+Required modules:
+
+- `P2 Evaluation Engine`
+- `P3 Convergence Engine`
+- `P5 Runtime Trace Model`
+
+Acceptance:
+
+- runtime failures are explainable through events and traces
+- retry reasons are visible
+- partial rerun is supported in the main task flow
+- a user can understand why the system moved to the next step
+
+Still missing:
+
+- a persisted and queryable trace model instead of mostly terminal-oriented debug output
+- clearer blocked, warning, and human-confirmation state explanations
+- better cross-run comparison for retries and revisions
+
+### 13.7 M6 Persistence And Project Memory
+
+- Move from JSON MVP persistence to a stable schema-backed store.
+- Persist tasks, subtasks, events, direct chats, settings, route history, and later project memory.
+- Keep restored state consistent across Desktop and future clients.
+
+Status:
+
+- JSON MVP only
+
+Priority:
+
+- `P0 next`
+
+Required modules:
+
+- `P5 Runtime Trace Model`
+- `P6 Persistence Schema Upgrade`
+
+Acceptance:
+
+- runtime state can survive restart
+- tasks, task runs, evaluator results, and route history can be restored
+- persistence is no longer limited to ad hoc JSON snapshots
+
+Still missing:
+
+- SQLite or Postgres-backed schema storage
+- full restore for direct chats, settings, and route selections
+- project-level memory and migration support
+
+### 13.8 M7 Multi-Client Access
+
+- Connect Web to the same backend used by Desktop.
+- Add lightweight read-only or light-action Web and mobile-friendly access.
+- Keep Desktop as the primary deep-control surface.
+
+Status:
+
+- not started beyond prototype work
+
+Priority:
+
+- `P2 later`
+
+Required modules:
+
+- backend-connected Web client
+- shared state restoration
+- lightweight mobile-friendly status access
+
+Acceptance:
+
+- Web can inspect shared task and agent state from the same backend as Desktop
+- future mobile-friendly access can reuse the same runtime state
+
+Still missing:
+
+- the Web client is still prototype-level
+- no mobile check-in surface exists yet
+- no multi-client sync polish or auth boundary has been defined
+
+### 13.9 M8 AI Execution System
+
+- Move from “AI task processing workspace” toward “AI execution system”.
+- Execute against real project objects, documents, modules, and future controlled targets.
+- Make outputs traceable, recoverable, and auditable.
+
+Status:
+
+- future direction
+
+Priority:
+
+- `P1 strategic`
+
+Additional direction:
+
+- models should be treated as probabilistic compute inside a deterministic runtime shell
+
+Required modules:
+
+- `P0 Runtime State Machine`
+- `P1 Role Contract System`
+- `P2 Evaluation Engine`
+- `P3 Convergence Engine`
+- `P4 Context Slicing Layer`
+- `P5 Runtime Trace Model`
+- `P6 Persistence Schema Upgrade`
+- `P7 Benchmark Harness`
+
+Acceptance:
+
+- runtime behavior can be evaluated as a system instead of as a prompt sequence
+- baseline single-pass generation can be compared with AES execution
+- cost, retries, traces, and quality can be measured together
+
+Still missing:
+
+- real execution targets have not been modeled yet
+- benchmark tasks do not yet prove runtime advantage over single-pass generation
+- control, evaluation, and convergence are not yet complete enough to call this a full execution runtime
+
+### 13.10 Leader-Controlled Editing
 
 The Leader should eventually support safe, lightweight document editing commands.
 
@@ -504,47 +945,73 @@ Guardrails:
 - destructive edits should not be allowed without confirmation
 - document edits should create timeline events
 
-### 12.4 Orchestration Roadmap
+Status:
 
-- Replace mock flow with real fixed orchestration.
-- Run Leader, Planner, Writer, Reviewer, and final Leader synthesis through selected model routes.
-- Add one bounded review retry loop.
-- Store intermediate outputs as first-class subtasks.
-- Surface orchestration state consistently across Desktop, Web, and future mobile views.
+- future direction
 
-## 13. Development Order
+Priority:
 
-### Phase 1
+- `P2 later`
 
-- define schemas
-- split repo into `Clients/Web` and `Clients/Desktop`
-- build mock clients
+Required modules:
 
-### Phase 2
+- document target model
+- safe edit contract
+- reviewable diff summary
+- timeline event logging for edits
 
-- build Desktop shell
-- build Team overview and drilldown
-- build Task workspace surfaces
-- build project and usage workspace prototypes
-- add theme and language settings
+Acceptance:
 
-### Phase 3
+- Leader can perform bounded document edits against approved targets
+- every edit is reviewable and attributable
+- destructive actions require confirmation
 
-- persist tasks, subtasks, and events
-- extend the current backend beyond in-memory state
-- connect GPT routing alongside the local Ollama writer path
-- persist model route selections and direct chat history
-- add validation event records
+Still missing:
 
-### Phase 4
+- document objects are not yet first-class runtime targets
+- no safe edit contract or diff workflow exists yet
+- no approval flow has been wired into execution
 
-- connect both clients to shared backend
-- replace mock usage data with telemetry
-- replace mock project summaries with real project state
-- improve prompts, error handling, and workflow reliability
-- add read-only mobile or mobile-friendly status views
+## 14. Development Order
 
-## 14. Acceptance Direction
+### Current Focus
+
+- harden `M4 Fixed Multi-Agent Workflow`
+- improve `M5 Task Observability And Recovery`
+- prepare `M6 Persistence And Project Memory`
+- convert the architecture into an execution-grade runtime model
+
+### Next Build Order
+
+#### Phase A: Runtime Hardening
+
+- introduce typed role IO
+- define explicit input, output, and failure contracts per role
+- implement stricter context slicing for Leader, Planner, Writer, and Reviewer
+- keep execution surfaces readable while exposing more runtime state
+
+#### Phase B: Executable Evaluation Loop
+
+- combine LLM review with programmatic validation
+- let evaluator outputs drive next runtime actions
+- strengthen state-aware retry and partial rerun logic
+- reduce retry loops that do not materially change the next candidate
+
+#### Phase C: Benchmark And Trace
+
+- choose at least one benchmark task domain such as document generation
+- compare baseline single-pass generation against AES runtime execution
+- add cost tracking and execution trace UI
+- make the runtime measurable as a system, not only observable as chat
+
+#### Phase D: Persistence And Client Expansion
+
+- move persistence from JSON MVP to SQLite once the schema stabilizes
+- persist direct chats, settings, and route-selection history more systematically
+- connect Web to the shared backend
+- add lightweight mobile-friendly status access
+
+## 15. Acceptance Direction
 
 The MVP should be considered directionally successful when:
 
@@ -559,7 +1026,7 @@ The MVP should be considered directionally successful when:
 9. users can tell which model each agent is using
 10. validation and retry reasons are visible rather than hidden inside chat text
 
-## 15. Notes For AI Coding Agents
+## 16. Notes For AI Coding Agents
 
 When implementing:
 
@@ -571,3 +1038,6 @@ When implementing:
 - prioritize end-to-end inspectability over abstraction purity
 - do not hide provider/model identity from the user
 - do not treat repeated model retries as a UX detail; expose the reason, owner, and validation result
+- prefer typed role IO and explicit contracts over free-form prompt coupling
+- design evaluator outputs so they can drive runtime actions programmatically
+- treat partial rerun and state-aware retry as core runtime features, not optional polish
