@@ -1013,32 +1013,17 @@ function formatDurationMs(value) {
   return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
 }
 
-function normalizeEventType(event) {
-  return event.eventType || event.type;
-}
-
-function normalizeEventTime(event) {
-  return event.createdAt || event.timestamp || event.time;
-}
-
-function taskTimelineLabel(event) {
-  const title = event.taskTitle || event.taskId || getCurrentTaskTitle();
-  const id = event.taskId && title !== event.taskId ? ` · ${event.taskId}` : "";
-  return `${title}${id}`;
-}
-
 function buildStageFlowRows() {
   const events = (state.currentTask.events || [])
     .map((event) => ({
-      type: normalizeEventType(event),
-      time: new Date(normalizeEventTime(event)).getTime(),
+      type: event.eventType || event.type,
+      time: new Date(event.createdAt || event.timestamp || event.time).getTime(),
     }))
     .filter((event) => event.type && Number.isFinite(event.time))
     .sort((left, right) => left.time - right.time);
   const rows = phases.map((phase) => ({
     phase,
     durationMs: 0,
-    startTime: null,
     status: "pending",
     isRunning: false,
   }));
@@ -1056,8 +1041,6 @@ function buildStageFlowRows() {
 
     activePhase = nextPhase;
     activeStart = event.time;
-    const row = rowByPhase.get(nextPhase);
-    row.startTime = row.startTime ?? event.time;
   }
 
   const currentStatus = state.currentTask.status || state.currentTask.phase;
@@ -1092,6 +1075,12 @@ function buildStageFlowRows() {
     }
     return row;
   });
+}
+
+function taskTimelineLabel(event) {
+  const title = event.taskTitle || event.taskId || getCurrentTaskTitle();
+  const id = event.taskId && title !== event.taskId ? ` · ${event.taskId}` : "";
+  return `${title}${id}`;
 }
 
 function getInvocationDuration(invocation) {
@@ -1552,7 +1541,6 @@ function buildWorkspaceMeta() {
           label: t("groups.current"),
           items: [
             { id: "overview", label: t("entries.overview"), meta: t("meta.now") },
-            { id: "stages", label: t("entries.stages"), meta: String(phases.length) },
             { id: "timeline", label: t("entries.timeline"), meta: t("meta.log") },
           ],
         },
@@ -2714,11 +2702,12 @@ function renderModelInvocation(invocation) {
   `;
 }
 
-function renderTaskOverviewContent() {
+function renderTaskOverviewContent(includeStageFlow = false) {
   const finalOutput = state.currentTask.finalOutput;
   const errorMessage = state.currentTask.errorMessage;
   const subtasks = state.currentTask.subtasks || [];
   const currentStatus = state.currentTask.status || state.currentTask.phase;
+  const stageFlowRows = includeStageFlow ? buildStageFlowRows() : [];
   const canRetryTask =
     !state.currentTask.isEmpty &&
     state.currentTask.id !== "--" &&
@@ -2773,6 +2762,35 @@ function renderTaskOverviewContent() {
         }
       </div>
 
+      ${
+        includeStageFlow
+          ? `
+            <div class="info-block">
+              <p class="eyebrow">${escapeHtml(t("stage.stageFlow"))}</p>
+              <div class="task-stage-map is-detailed">
+                ${stageFlowRows
+                  .map((row, index) => {
+                    const durationLabel = row.durationMs > 0 ? formatDurationMs(row.durationMs) : "--";
+                    return `
+                      <div class="task-stage-node is-${escapeHtml(row.status)}">
+                        <span>${index + 1}</span>
+                        <strong>${escapeHtml(formatPhase(row.phase))}</strong>
+                        <small>${escapeHtml(durationLabel)}${row.isRunning ? " +" : ""}</small>
+                        ${
+                          row.isRunning
+                            ? `<i class="stage-spinner" aria-label="${escapeHtml(t("stage.requestRunning"))}"></i>`
+                            : ""
+                        }
+                      </div>
+                    `;
+                  })
+                  .join("")}
+              </div>
+            </div>
+          `
+          : ""
+      }
+
       <div class="info-block">
         <p class="eyebrow">${escapeHtml(t("stage.intermediateOutputs"))}</p>
         ${
@@ -2808,40 +2826,6 @@ function renderTaskOverviewContent() {
               ? `<pre class="output-text" data-output-scroll-key="final">${escapeHtml(finalOutput)}</pre>`
               : `<p>${escapeHtml(t("stage.outputPending"))}</p>`
         }
-      </div>
-    </div>
-  `;
-}
-
-function renderStageFlowContent() {
-  const rows = buildStageFlowRows();
-  return `
-    <div class="stage-layout">
-      <div class="info-block">
-        <p class="eyebrow">${escapeHtml(t("stage.stageFlow"))}</p>
-        <div class="task-stage-map is-detailed">
-          ${rows
-            .map((row, index) => {
-              const durationLabel = row.durationMs > 0 ? formatDurationMs(row.durationMs) : "--";
-              return `
-                <div class="task-stage-node is-${escapeHtml(row.status)}">
-                  <span>${index + 1}</span>
-                  <strong>${escapeHtml(formatPhase(row.phase))}</strong>
-                  <small>${escapeHtml(durationLabel)}${row.isRunning ? " +" : ""}</small>
-                  ${
-                    row.isRunning
-                      ? `<i class="stage-spinner" aria-label="${escapeHtml(t("stage.requestRunning"))}"></i>`
-                      : ""
-                  }
-                </div>
-              `;
-            })
-            .join("")}
-        </div>
-        <div class="progress-line">
-          <div class="progress-value" style="width: ${state.currentTask.progress}%"></div>
-        </div>
-        <p class="leader-note">${escapeHtml(buildLeaderNote())}</p>
       </div>
     </div>
   `;
@@ -3357,9 +3341,8 @@ function renderStageContentBody() {
   if (workspace === "chat" && entry === "checkins") return renderCheckinsContent();
   if (workspace === "team" && entry === "overview") return renderTeamOverviewContent();
   if (workspace === "team") return renderAgentDetailContent(entry);
-  if (workspace === "task" && isTaskEntry(entry)) return renderTaskOverviewContent();
-  if (workspace === "task" && entry === "overview") return renderTaskOverviewContent();
-  if (workspace === "task" && entry === "stages") return renderStageFlowContent();
+  if (workspace === "task" && isTaskEntry(entry)) return renderTaskOverviewContent(true);
+  if (workspace === "task" && entry === "overview") return renderTaskOverviewContent(false);
   if (workspace === "task" && entry === "timeline") return renderTimelineContent();
   if (workspace === "projects" && entry === "portfolio") return renderProjectsOverviewContent();
   if (workspace === "projects") return renderProjectDetailContent(entry);

@@ -383,8 +383,7 @@ h3 {
 
 .tag,
 .skill,
-.status-chip,
-.phase-chip {
+.status-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -395,14 +394,12 @@ h3 {
 }
 
 .tag.accent,
-.status-chip.active,
-.phase-chip.active {
+.status-chip.active {
   color: #a8ecff;
   background: var(--accent-soft);
 }
 
-.status-chip.ok,
-.phase-chip.done {
+.status-chip.ok {
   color: var(--ok);
   background: rgba(141, 231, 168, 0.14);
 }
