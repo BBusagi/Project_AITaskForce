@@ -35,6 +35,9 @@ User -> Leader -> Planner -> Writer -> Reviewer -> Leader Final Response
 - 全窗口 Desktop shell，采用外侧 rail、中栏树结构、右侧工作区的桌面应用布局。
 - Desktop 中的 `Chat`、`Team`、`Task`、`Projects`、`Usage`、`Settings` 工作区。
 - Leader-first 的聊天入口，支持自然协商和独立的任务发布动作。
+- Leader feasibility gate，会在进入 workflow 前判断当前任务是 `ready`、`degraded`、`blocked` 还是 `needs_clarification`。
+- Deliverable contract extraction：抽取意图、交付物类型、文件格式、时长/页数/行数等规格、required actions 和验收元数据。
+- 静态 capability registry 加本地 capability pool，用于记录已完成任务形成的能力证据。
 - 通过 `POST /api/chat` 进行 direct agent chat，并跟随各 agent 当前选择的模型路由。
 - 固定后端 workflow：
   `Leader -> Planner -> Writer -> Reviewer -> Leader Final Response`
@@ -152,7 +155,7 @@ After attempt 2: human_confirmation
    用户先与 Leader 自然对话
 
 2. Task Contract
-   Leader 将需求收敛为明确任务
+   Leader 将需求收敛为明确交付物合同，包括输出类型、格式、规模和 required actions
 
 3. Planning
    Planner 定义 objective、constraints、output format 和 handoff 逻辑
@@ -457,6 +460,8 @@ Leader -> Planner -> Writer -> Reviewer -> Final
 - 可切换的模型路由
 - Leader 任务发布入口
 - 能跑通的固定 workflow slice
+- 初步 deliverable contract extraction，覆盖文本、PPT、表格、图片、音频、视频和 WebApp 类请求
+- 本地 capability pool，用于保存 completed task evidence
 
 当前主缺口已经不是界面外壳，而是执行内核的加固。
 
@@ -488,6 +493,7 @@ Leader -> Planner -> Writer -> Reviewer -> Final
 当前判断：
 - 这是当前主 MVP
 - 现有系统已经覆盖 intake、planning、writing、review 和报告型输出
+- 当前 Team 会正确阻止完整 PPT 交付，因为 `.pptx` export 仍然缺失
 - 当前主要缺口在真实交付物层：slide schema、`.pptx` 生成、文件级 review
 
 #### MVP 2：WebApp 生成系统

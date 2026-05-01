@@ -7,8 +7,11 @@ const {
   addMessage,
   getTask,
   getTaskSubtasks,
+  getCapabilityPool,
+  recordCapabilityEvidence,
   state,
 } = require("./store");
+const { buildTaskContract, evaluateFeasibility } = require("./capabilities");
 const { generate, resolveRoute } = require("./model-gateway");
 const { providers } = require("./config");
 
@@ -178,7 +181,7 @@ function buildRunningInvocation(route, startedAt, timeoutMs) {
   };
 }
 
-async function generateRequired(taskId, role, prompt) {
+async function generateRequired(taskId, role, prompt, options = {}) {
   const route = resolveRoute(role);
   const startedAtMs = Date.now();
   const startedAt = nowIso();
@@ -187,7 +190,7 @@ async function generateRequired(taskId, role, prompt) {
   console.log(`MODEL REQUEST START role=${role} provider=${route.provider} model=${route.model} timeoutMs=${timeoutMs ?? "none"}`);
 
   try {
-    const result = await generate(role, prompt);
+    const result = await generate(role, prompt, options);
     const durationMs = Date.now() - startedAtMs;
 
     if (!String(result.text || "").trim()) {
@@ -210,6 +213,8 @@ async function generateRequired(taskId, role, prompt) {
         durationMs,
         timeoutMs,
         textChars: textLength(result.text),
+        thinkingText: result.thinking || null,
+        thinkingChars: textLength(result.thinking),
         errorMessage: null,
       },
     };
@@ -248,6 +253,7 @@ async function runModelForSubtask(taskId, subtaskId, role, prompt) {
   const route = resolveRoute(role);
   const startedAt = nowIso();
   const timeoutMs = getRouteTimeoutMs(route);
+  let lastProgressPersistedAt = 0;
 
   updateSubtask(taskId, subtaskId, {
     status: "running",
@@ -255,12 +261,30 @@ async function runModelForSubtask(taskId, subtaskId, role, prompt) {
   });
 
   try {
-    const result = await generateRequired(taskId, role, prompt);
+    const result = await generateRequired(taskId, role, prompt, {
+      onProgress: (progress) => {
+        const now = Date.now();
+        if (!progress.done && now - lastProgressPersistedAt < 1000) return;
+        lastProgressPersistedAt = now;
+        updateSubtask(taskId, subtaskId, {
+          modelInvocation: {
+            ...buildRunningInvocation(route, startedAt, timeoutMs),
+            status: progress.done ? "completed" : "running",
+            durationMs: progress.durationMs,
+            textChars: textLength(progress.text),
+            partialText: progress.text || null,
+            thinkingText: progress.thinking || null,
+            thinkingChars: textLength(progress.thinking),
+          },
+        });
+      },
+    });
     updateSubtask(taskId, subtaskId, {
       modelInvocation: result.invocation,
     });
     return result;
   } catch (error) {
+    const existingInvocation = getTaskSubtasks(taskId).find((subtask) => subtask.id === subtaskId)?.modelInvocation || null;
     updateSubtask(taskId, subtaskId, {
       status: "failed",
       modelInvocation:
@@ -271,6 +295,17 @@ async function runModelForSubtask(taskId, subtaskId, role, prompt) {
           errorMessage: error.message,
         },
     });
+    if (existingInvocation && (existingInvocation.partialText || existingInvocation.thinkingText)) {
+      updateSubtask(taskId, subtaskId, {
+        modelInvocation: {
+          ...(error.modelInvocation || existingInvocation),
+          partialText: existingInvocation.partialText || null,
+          thinkingText: existingInvocation.thinkingText || null,
+          thinkingChars: existingInvocation.thinkingChars || 0,
+          errorMessage: error.message,
+        },
+      });
+    }
     throw error;
   }
 }
@@ -536,12 +571,13 @@ async function runLeaderFinal(taskId, task, planText, writerSubmission, reviewDe
     status: "completed",
   });
 
-  updateTask(taskId, {
+  const completedTask = updateTask(taskId, {
     status: "completed",
     stageOwnerId: "leader",
     finalOutput: finalResult.text,
     errorMessage: null,
   });
+  recordCapabilityEvidence(completedTask);
   addEvent(taskId, {
     actorType: "agent",
     actorId: "leader",
@@ -891,12 +927,13 @@ async function runTask(taskId) {
       status: "completed",
     });
 
-    updateTask(taskId, {
+    const completedTask = updateTask(taskId, {
       status: "completed",
       stageOwnerId: "leader",
       finalOutput: finalResult.text,
       errorMessage: null,
     });
+    recordCapabilityEvidence(completedTask);
     addEvent(taskId, {
       actorType: "agent",
       actorId: "leader",
@@ -936,10 +973,14 @@ async function runTask(taskId) {
 }
 
 function createAndStartTask(input) {
+  const taskContract = input.taskContract || buildTaskContract(input);
+  const feasibilityResult = input.feasibilityResult || evaluateFeasibility(taskContract, getCapabilityPool());
   const task = createTask({
     title: input.title?.trim(),
     userInput: input.userInput,
     priority: input.priority || "medium",
+    taskContract,
+    feasibilityResult,
   });
 
   addMessage(task.id, {
@@ -958,6 +999,8 @@ function createAndStartTask(input) {
   addLifecycleMessage(task.id, "leader", "Leader received the task and started the ATF workflow.");
   logTaskEvent(task.id, "task_created", "Task created from publication confirmation.", {
     title: task.title,
+    artifactKind: taskContract.artifactKind,
+    feasibility: feasibilityResult.status,
     detailApi: `/api/tasks/${task.id}`,
     snapshotApi: `/api/tasks/${task.id}/snapshot`,
   });

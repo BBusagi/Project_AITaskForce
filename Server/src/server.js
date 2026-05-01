@@ -2,6 +2,7 @@ const http = require("node:http");
 const { URL } = require("node:url");
 const { host, port, providers } = require("./config");
 const { createAndStartTask, retryFailedStep } = require("./orchestrator");
+const { buildCapabilityCatalog, buildTaskContract, evaluateFeasibility } = require("./capabilities");
 const {
   state,
   getTask,
@@ -14,6 +15,7 @@ const {
   buildAgentsView,
   buildSnapshot,
   buildTeamTimeline,
+  getCapabilityPool,
 } = require("./store");
 const {
   buildRouteId,
@@ -198,6 +200,21 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/api/capabilities") {
+      sendJson(res, 200, buildCapabilityCatalog(getCapabilityPool()));
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/feasibility") {
+      const body = await readJsonBody(req);
+      const contract = body.taskContract?.intent ? buildTaskContract(body.taskContract) : buildTaskContract(body);
+      sendJson(res, 200, {
+        taskContract: contract,
+        feasibilityResult: evaluateFeasibility(contract, getCapabilityPool()),
+      });
+      return;
+    }
+
     if (req.method === "GET" && pathname === "/api/tasks") {
       sendJson(res, 200, listTasks().map(toTaskSummary));
       return;
@@ -214,8 +231,18 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { error: "userInput is required" });
         return;
       }
+      const taskContract = body.taskContract?.intent ? buildTaskContract(body.taskContract) : buildTaskContract(body);
+      const feasibilityResult = evaluateFeasibility(taskContract, getCapabilityPool());
+      if (["blocked", "needs_clarification"].includes(feasibilityResult.status)) {
+        sendJson(res, 409, {
+          error: feasibilityResult.status === "needs_clarification" ? "Task needs clarification before publication" : "Task is blocked by missing team capability",
+          taskContract,
+          feasibilityResult,
+        });
+        return;
+      }
 
-      const task = createAndStartTask(body);
+      const task = createAndStartTask({ ...body, taskContract, feasibilityResult });
       sendJson(res, 201, {
         taskId: task.id,
         title: task.title,

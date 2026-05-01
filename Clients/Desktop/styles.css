@@ -676,6 +676,26 @@ h3 {
   background: rgba(255, 150, 85, 0.08);
 }
 
+.publish-card-ready {
+  border-color: rgba(63, 214, 143, 0.34);
+  background: rgba(63, 214, 143, 0.08);
+}
+
+.publish-card-degraded {
+  border-color: rgba(255, 196, 87, 0.38);
+  background: rgba(255, 196, 87, 0.08);
+}
+
+.publish-card-needs_clarification {
+  border-color: rgba(255, 196, 87, 0.38);
+  background: rgba(255, 196, 87, 0.08);
+}
+
+.publish-card-blocked {
+  border-color: rgba(255, 111, 111, 0.38);
+  background: rgba(255, 111, 111, 0.08);
+}
+
 .publish-card h3 {
   margin: 0 0 6px;
   font-size: 18px;
@@ -698,6 +718,48 @@ h3 {
   gap: 6px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.feasibility-panel {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.feasibility-panel p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.capability-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.capability-chip {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.capability-available {
+  border-color: rgba(63, 214, 143, 0.36);
+  color: var(--text);
+}
+
+.capability-partial {
+  border-color: rgba(255, 196, 87, 0.42);
+}
+
+.capability-missing {
+  border-color: rgba(255, 111, 111, 0.42);
 }
 
 .agent-card {
@@ -1091,6 +1153,26 @@ h3 {
   color: #ffd4d4;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.thinking-trace {
+  margin: -2px 12px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.thinking-trace summary {
+  padding: 8px 10px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.thinking-trace pre {
+  max-height: 180px;
+  padding: 0 10px 10px;
+  color: var(--muted);
 }
 
 .subtask-output pre {

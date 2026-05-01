@@ -34,6 +34,9 @@ Implemented now:
 - Full-window Desktop shell with outer rail, collapsible middle sidebar, and right workspace stage.
 - `Chat`, `Team`, `Task`, `Projects`, `Usage`, and `Settings` workspaces in the Desktop client.
 - Leader-first chat flow with requirement negotiation plus a separate task-publication action.
+- Leader feasibility gate with `ready`, `degraded`, `blocked`, and `needs_clarification` capability outcomes before workflow execution.
+- Deliverable contract extraction for intent, artifact type, file format, size hints such as duration/pages/rows, required actions, and acceptance metadata.
+- Static capability registry plus a local capability pool for evidence from completed task runs.
 - Direct agent chat through `POST /api/chat` using each agent's currently selected route.
 - Fixed backend workflow:
   `Leader -> Planner -> Writer -> Reviewer -> Leader Final Response`
@@ -145,7 +148,7 @@ The useful framework emerging from the current system is:
    Natural conversation with Leader
 
 2. Task Contract
-   Leader turns the request into an explicit task
+   Leader turns the request into an explicit deliverable contract, including intended output type, format, size, and required actions
 
 3. Planning
    Planner defines objective, constraints, output format, and handoff logic
@@ -270,6 +273,7 @@ Needed work:
 - typed input contracts
 - typed output contracts
 - failure contracts per role
+- deliverable contracts for artifact type, file format, duration/page/row expectations, and required actions
 
 #### P2 Evaluation Engine
 
@@ -353,14 +357,8 @@ Needed work:
 See `Agents.md` for the full product problem, workflow model, and roadmap.
 
 ## Run
-
 ### Server
-
-From `Server`:
-
-```bash
-npm start
-```
+`npm start`
 
 Default backend URL:
 
@@ -407,11 +405,10 @@ qwen3:8b
 ```
 
 ### Desktop
+`npm install`
 
-From `Clients/Desktop`:
-
-```bash
-npm install
+```
+cd Client/Desktop
 npm start
 ```
 
@@ -463,6 +460,8 @@ The project already has:
 - routeable model connectivity
 - Leader task publication
 - a working fixed workflow slice
+- first-pass deliverable contract extraction and capability gating for text, presentation, spreadsheet, image, audio, video, and webapp-like requests
+- local capability pool storage for completed-task evidence
 
 The main gap is no longer surface layout. The main gap is execution-core hardening.
 
@@ -498,6 +497,7 @@ Current position:
 
 - this is the active MVP focus
 - the current system already covers intake, planning, writing, review, and report-shaped outputs
+- the current team correctly blocks full PPT delivery because `.pptx` export is still missing
 - the main missing layer is deliverable execution: slide schema, `.pptx` generation, and file-level review
 
 #### MVP 2: WebApp Generation System
@@ -557,7 +557,7 @@ Acceptance:
 Still missing:
 
 - a formal state-machine implementation instead of scattered orchestration branching
-- stronger failure contracts between planner, writer, reviewer, and leader
+- richer failure contracts between planner, writer, reviewer, and leader
 - tighter coupling between Leader publication and Planner execution input
 
 #### R2 Observable Task Runtime

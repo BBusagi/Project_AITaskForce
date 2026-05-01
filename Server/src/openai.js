@@ -1,4 +1,5 @@
 const { providers } = require("./config");
+const { request } = require("./http-client");
 
 function getConfig() {
   return providers.openai;
@@ -14,7 +15,7 @@ async function openaiRequest(path, options = {}) {
     throw new Error("OpenAI API key is not configured");
   }
 
-  const response = await fetch(`${config.baseUrl}${path}`, {
+  const response = await request(`${config.baseUrl}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",

@@ -35,6 +35,7 @@ function validateStoreSnapshot(snapshot) {
       subtasks: {},
       events: {},
       messages: {},
+      capabilityPool: [],
     };
   }
 
@@ -45,6 +46,7 @@ function validateStoreSnapshot(snapshot) {
     subtasks: snapshot.subtasks && typeof snapshot.subtasks === "object" ? snapshot.subtasks : {},
     events: snapshot.events && typeof snapshot.events === "object" ? snapshot.events : {},
     messages: snapshot.messages && typeof snapshot.messages === "object" ? snapshot.messages : {},
+    capabilityPool: Array.isArray(snapshot.capabilityPool) ? snapshot.capabilityPool : [],
   };
 }
 

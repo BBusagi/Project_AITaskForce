@@ -21,6 +21,98 @@ const PROVIDER_LABELS = {
   anthropic: "Claude API",
 };
 
+const CAPABILITY_DEFINITIONS = {
+  outline_planning: { label: "Outline planning", status: "available" },
+  content_writing: { label: "Content writing", status: "available" },
+  slide_copywriting: { label: "Slide copywriting", status: "available" },
+  speaker_notes_generation: { label: "Speaker notes generation", status: "available" },
+  document_review: { label: "Document review", status: "available" },
+  tabular_data_generation: { label: "Tabular data generation", status: "available" },
+  spreadsheet_review: { label: "Spreadsheet review", status: "partial" },
+  spreadsheet_export: { label: "Spreadsheet export", status: "missing" },
+  current_data_research: { label: "Current data research", status: "missing" },
+  presentation_review: { label: "Presentation review", status: "partial" },
+  presentation_design: { label: "Presentation design", status: "missing" },
+  pptx_export: { label: "PPTX export", status: "missing" },
+  image_prompting: { label: "Image prompt writing", status: "available" },
+  image_generation: { label: "Image generation", status: "missing" },
+  image_export: { label: "Image export", status: "missing" },
+  visual_prompting: { label: "Visual prompt writing", status: "partial" },
+  video_generation: { label: "Video generation", status: "missing" },
+  video_export: { label: "Video export", status: "missing" },
+  duration_control: { label: "Duration control", status: "missing" },
+  audio_generation: { label: "Audio generation", status: "missing" },
+  audio_export: { label: "Audio export", status: "missing" },
+  code_planning: { label: "Code planning", status: "partial" },
+  code_generation: { label: "Code generation", status: "missing" },
+  build_execution: { label: "Build execution", status: "missing" },
+  runtime_verification: { label: "Runtime verification", status: "missing" },
+};
+
+const ARTIFACT_REQUIREMENTS = {
+  presentation: {
+    required: ["outline_planning", "slide_copywriting", "speaker_notes_generation", "presentation_review", "pptx_export"],
+    optional: ["presentation_design"],
+    degradedScope:
+      "Deliver a presentation content package: outline, per-slide copy, speaker notes, and review report. Final .pptx export and visual design are excluded until the team is upgraded.",
+  },
+  presentation_content: {
+    required: ["outline_planning", "slide_copywriting", "speaker_notes_generation", "presentation_review"],
+    optional: [],
+    degradedScope: null,
+  },
+  report: {
+    required: ["outline_planning", "content_writing", "document_review"],
+    optional: [],
+    degradedScope: null,
+  },
+  spreadsheet: {
+    required: ["tabular_data_generation", "spreadsheet_review", "spreadsheet_export", "current_data_research"],
+    optional: [],
+    degradedScope:
+      "Deliver a structured table draft with clearly marked unverified fields. Final .xlsx export and current data verification are excluded until the team is upgraded.",
+  },
+  video: {
+    required: ["visual_prompting", "video_generation", "duration_control", "video_export"],
+    optional: [],
+    degradedScope:
+      "Deliver a video production package: concept, shot list, scene script, and prompts for an external video model. Actual video generation and mp4 export are excluded until the team is upgraded.",
+  },
+  image: {
+    required: ["image_prompting", "image_generation", "image_export"],
+    optional: [],
+    degradedScope:
+      "Deliver image prompts, composition notes, and style directions. Actual image generation and export are excluded until the team is upgraded.",
+  },
+  audio: {
+    required: ["content_writing", "audio_generation", "audio_export"],
+    optional: [],
+    degradedScope:
+      "Deliver an audio script and production notes. Actual audio generation and export are excluded until the team is upgraded.",
+  },
+  webapp: {
+    required: ["code_planning", "code_generation", "build_execution", "runtime_verification"],
+    optional: [],
+    degradedScope:
+      "Deliver requirements and a technical plan only. Code generation, build execution, and runtime verification are excluded until the team is upgraded.",
+  },
+  memo: {
+    required: ["content_writing", "document_review"],
+    optional: [],
+    degradedScope: null,
+  },
+  summary: {
+    required: ["content_writing", "document_review"],
+    optional: [],
+    degradedScope: null,
+  },
+  unknown: {
+    required: [],
+    optional: [],
+    degradedScope: null,
+  },
+};
+
 function createDefaultProviders() {
   return {
     ollama: {
@@ -211,6 +303,7 @@ const dictionaries = {
       requestUnknown: "Unknown",
       duration: "Duration",
       responseSize: "Response",
+      thinkingTrace: "Thinking Trace",
       timeout: "Timeout",
       model: "Model",
       modelRoute: "Model Route",
@@ -269,6 +362,9 @@ const dictionaries = {
       taskCreation: "Task Creation",
       confirmPublish: "Confirm Publish",
       continueNegotiation: "Continue Negotiation",
+      useDegradedScope: "Use Degraded Scope",
+      updateTeam: "Update Team",
+      cancel: "Cancel",
       retryTask: "Retry Task",
       retryFailedStep: "Retry Failed Step",
       archiveTask: "Archive",
@@ -282,6 +378,13 @@ const dictionaries = {
       inputPlaceholder: "Discuss scope, missing details, and acceptance boundaries with Leader...",
       publishReady: "Task publication review",
       publishReadyNote: "Leader has prepared a task draft. Confirm to publish it into the workflow.",
+      feasibilityReady: "Team capability check passed.",
+      feasibilityDegraded: "The team can complete a reduced version of this task.",
+      feasibilityBlocked: "The current team is missing critical capability for this task.",
+      feasibilityNeedsClarification: "The deliverable type is not clear enough to publish yet.",
+      capabilityAvailable: "Available",
+      capabilityPartial: "Partial",
+      capabilityMissing: "Missing",
       noDirectChats: "No direct agent chats yet. Open one from the Team workspace.",
     },
     placeholder:
@@ -518,6 +621,7 @@ const dictionaries = {
       requestUnknown: "未知",
       duration: "耗时",
       responseSize: "响应",
+      thinkingTrace: "思考记录",
       timeout: "超时",
       model: "模型",
       modelRoute: "模型路由",
@@ -567,6 +671,9 @@ const dictionaries = {
       taskCreation: "任务创建",
       confirmPublish: "确认发布",
       continueNegotiation: "继续协商",
+      useDegradedScope: "采用降级范围",
+      updateTeam: "更新 Team",
+      cancel: "取消",
       retryTask: "重新尝试任务",
       retryFailedStep: "重试失败环节",
       archiveTask: "归档",
@@ -580,6 +687,13 @@ const dictionaries = {
       inputPlaceholder: "和 Leader 协商范围、不明确点和验收边界...",
       publishReady: "任务发布确认",
       publishReadyNote: "Leader 已经准备好任务草案。确认后会正式发布到工作流。",
+      feasibilityReady: "当前 Team 能力检查已通过。",
+      feasibilityDegraded: "当前 Team 可以完成该任务的降级版本。",
+      feasibilityBlocked: "当前 Team 缺少该任务所需的关键能力。",
+      feasibilityNeedsClarification: "当前交付物类型还不够明确，暂时不能发布任务。",
+      capabilityAvailable: "可用",
+      capabilityPartial: "部分可用",
+      capabilityMissing: "缺失",
       noDirectChats: "还没有 agent 直接会话，请先从 Team 工作区创建。",
     },
     placeholder:
@@ -1286,14 +1400,155 @@ function formatModelRequestError(error) {
   return message;
 }
 
+function detectArtifactKind(input = "") {
+  const text = String(input).toLowerCase();
+  if (/\b(excel|excl|xlsx|spreadsheet|csv)\b/.test(text) || /excel|excl|xlsx|表格|电子表/.test(text)) return "spreadsheet";
+  if (/\b(ppt|pptx|powerpoint|slide|slides|deck)\b/.test(text) || /ppt|演示|幻灯|スライド/.test(text)) return "presentation";
+  if (/\b(video|mp4|movie|clip)\b/.test(text) || /视频|影像|動画/.test(text)) return "video";
+  if (/\b(image|picture|png|jpg|jpeg|poster|illustration)\b/.test(text) || /图片|图像|海报|插画|画像/.test(text)) return "image";
+  if (/\b(audio|mp3|wav|voice|music|podcast)\b/.test(text) || /音频|声音|音乐/.test(text)) return "audio";
+  if (/\b(webapp|web app|website|frontend|react|vue|npm build)\b/.test(text) || /网页|应用|前端/.test(text)) return "webapp";
+  if (/\b(report|proposal|document|docx|pdf)\b/.test(text) || /报告|文档|提案|資料/.test(text)) return "report";
+  if (/\b(memo|minutes|note|brief)\b/.test(text) || /纪要|备忘|メモ/.test(text)) return "memo";
+  if (/\b(summary|summarize|summarise)\b/.test(text) || /总结|要約/.test(text)) return "summary";
+  return "unknown";
+}
+
+function detectDurationSeconds(input = "") {
+  const text = String(input);
+  const seconds = text.match(/(\d+(?:\.\d+)?)\s*(s|sec|secs|second|seconds|秒)/i);
+  if (seconds) return Number(seconds[1]);
+  const minutes = text.match(/(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes|分钟)/i);
+  return minutes ? Math.round(Number(minutes[1]) * 60) : null;
+}
+
+function detectPageCount(input = "") {
+  const match = String(input).match(/(\d+)\s*(pages?|slides?|页|张|頁)/i);
+  return match ? Number(match[1]) : null;
+}
+
+function detectRowCount(input = "") {
+  const match = String(input).match(/(\d+)\s*(rows?|行|条)/i);
+  return match ? Number(match[1]) : null;
+}
+
+function detectFormat(input, artifactKind) {
+  const text = String(input || "").toLowerCase();
+  const formats = ["pptx", "ppt", "xlsx", "csv", "mp4", "mov", "png", "jpg", "jpeg", "mp3", "wav", "docx", "pdf", "html"];
+  const explicit = formats.find((format) => text.includes(format));
+  if (explicit) return explicit;
+  if (artifactKind === "spreadsheet") return "xlsx";
+  if (artifactKind === "presentation") return "pptx";
+  if (artifactKind === "video") return "mp4";
+  if (artifactKind === "image") return "png";
+  if (artifactKind === "audio") return "mp3";
+  return artifactKind === "unknown" ? "unspecified" : "markdown";
+}
+
+function inferRequiredActions(artifactKind, input) {
+  const requirements = ARTIFACT_REQUIREMENTS[artifactKind] || ARTIFACT_REQUIREMENTS.unknown;
+  const actions = new Set(requirements.required);
+  if (artifactKind === "spreadsheet" && /price|ticket|current|latest|价格|门票|最新|当前/.test(String(input).toLowerCase())) {
+    actions.add("current_data_research");
+  }
+  return [...actions];
+}
+
+function buildTaskContract(taskInput) {
+  const objective = String(taskInput || "").trim();
+  const artifactKind = detectArtifactKind(objective);
+  return {
+    intent: {
+      raw: objective,
+      summary: objective.length > 120 ? `${objective.slice(0, 120)}...` : objective,
+      category: artifactKind,
+      confidence: artifactKind === "unknown" ? 0.2 : 0.75,
+      source: "desktop_heuristic_contract_extractor",
+    },
+    artifactKind,
+    objective,
+    deliverables: [
+      {
+        type: artifactKind,
+        format: detectFormat(objective, artifactKind),
+        filename: null,
+        size: {
+          durationSeconds: detectDurationSeconds(objective),
+          pageCount: detectPageCount(objective),
+          rowCount: detectRowCount(objective),
+        },
+        contentDescription: objective,
+        qualityBar: "usable draft",
+      },
+    ],
+    requiredActions: inferRequiredActions(artifactKind, objective),
+    language: "unspecified",
+    style: "unspecified",
+    audience: "unspecified",
+    constraints: [],
+    acceptanceCriteria: [],
+  };
+}
+
+function evaluateTaskFeasibility(taskContract) {
+  const requirements = ARTIFACT_REQUIREMENTS[taskContract.artifactKind] || ARTIFACT_REQUIREMENTS.unknown;
+  if (taskContract.artifactKind === "unknown" || taskContract.intent?.confidence < 0.5) {
+    return {
+      status: "needs_clarification",
+      artifactKind: taskContract.artifactKind,
+      required: [],
+      available: [],
+      partial: [],
+      missing: [],
+      optionalMissing: [],
+      deliverables: taskContract.deliverables || [],
+      requiredActions: taskContract.requiredActions || [],
+      degradedPlan: null,
+      blockedReason: "The system could not identify a concrete deliverable type with enough confidence.",
+      nextAction: "clarify",
+    };
+  }
+  const required = (taskContract.requiredActions || requirements.required).map((id) => ({ id, ...CAPABILITY_DEFINITIONS[id] })).filter((capability) => capability.label);
+  const optional = requirements.optional.map((id) => ({ id, ...CAPABILITY_DEFINITIONS[id] })).filter((capability) => capability.label);
+  const missing = required.filter((capability) => capability.status === "missing");
+  const partial = required.filter((capability) => capability.status === "partial");
+  const available = required.filter((capability) => capability.status === "available");
+  const optionalMissing = optional.filter((capability) => capability.status !== "available");
+  const hasCriticalMissing = missing.some((capability) => capability.id.endsWith("_export") || capability.id === "current_data_research");
+  const status = hasCriticalMissing ? "blocked" : missing.length || partial.length || optionalMissing.length ? "degraded" : "ready";
+
+  return {
+    status,
+    artifactKind: taskContract.artifactKind,
+    required: required.map((capability) => capability.id),
+    available: available.map((capability) => capability.id),
+    partial: partial.map((capability) => capability.id),
+    missing: missing.map((capability) => capability.id),
+    optionalMissing: optionalMissing.map((capability) => capability.id),
+    deliverables: taskContract.deliverables || [],
+    requiredActions: taskContract.requiredActions || required.map((capability) => capability.id),
+    degradedPlan: status === "degraded" || status === "blocked" ? requirements.degradedScope : null,
+    blockedReason: status === "blocked" ? "The current team is missing a critical artifact action required by this task." : null,
+    nextAction: status === "ready" ? "confirm" : status === "degraded" ? "degrade_or_discuss" : "update_team_or_discuss",
+  };
+}
+
+function capabilityLabel(id) {
+  return CAPABILITY_DEFINITIONS[id]?.label || id.replaceAll("_", " ");
+}
+
 function buildLeaderTaskDraft(taskInput) {
   const normalizedInput = taskInput.trim();
   const latestInput = normalizedInput || getCurrentTaskTitle();
   const title = latestInput.length > 48 ? `${latestInput.slice(0, 48)}...` : latestInput;
+  const taskContract = buildTaskContract(normalizedInput || latestInput);
+  const feasibilityResult = evaluateTaskFeasibility(taskContract);
 
   return {
     title,
     input: normalizedInput || latestInput,
+    taskContract,
+    feasibilityResult,
     milestones: [
       "Planner defines objective, constraints, and output format.",
       "Planner assigns the required specialist agents.",
@@ -1305,11 +1560,15 @@ function buildLeaderTaskDraft(taskInput) {
 }
 
 function formatLeaderTaskDraft(draft) {
+  const feasibility = draft.feasibilityResult;
   return [
     `Task draft: ${draft.title}`,
     "",
     "Scope:",
     draft.input,
+    "",
+    `Artifact: ${draft.taskContract?.artifactKind || "summary"}`,
+    `Feasibility: ${feasibility?.status || "ready"}`,
     "",
     "Milestones:",
     ...draft.milestones.map((milestone, index) => `${index + 1}. ${milestone}`),
@@ -1334,6 +1593,11 @@ function publishLeaderTaskDraft(conversationId) {
   const conversation = getConversationById(conversationId);
   const draft = conversation?.taskCreation?.draft;
   if (!conversation || !draft) return;
+  if (draft.feasibilityResult?.status !== "ready") {
+    appendConversationMessage(conversationId, "leader", "This task is not ready for the current team. Continue negotiation or update the team capability first.");
+    renderApp();
+    return;
+  }
 
   conversation.taskCreation = {
     status: "published",
@@ -1344,7 +1608,58 @@ function publishLeaderTaskDraft(conversationId) {
     "leader",
     `Task published.\n\n${formatLeaderTaskDraft(draft)}\n\nPlanner is now responsible for subtask breakdown and agent assignment.`
   );
-  void runTaskLifecycle(draft.input);
+  void runTaskLifecycle(draft);
+  renderApp();
+}
+
+function applyDegradedLeaderTaskDraft(conversationId) {
+  const conversation = getConversationById(conversationId);
+  const draft = conversation?.taskCreation?.draft;
+  const degradedPlan = draft?.feasibilityResult?.degradedPlan;
+  if (!conversation || !draft || !degradedPlan) return;
+
+  const downgradedDraft = buildLeaderTaskDraft(degradedPlan);
+  downgradedDraft.taskContract.artifactKind = draft.taskContract?.artifactKind === "presentation" ? "presentation_content" : "report";
+  downgradedDraft.taskContract.deliverables = [
+    {
+      type: downgradedDraft.taskContract.artifactKind,
+      format: "markdown",
+      filename: null,
+      size: { durationSeconds: null, pageCount: null, rowCount: null },
+      contentDescription: degradedPlan,
+      qualityBar: "usable draft",
+    },
+  ];
+  downgradedDraft.taskContract.requiredActions = inferRequiredActions(downgradedDraft.taskContract.artifactKind, degradedPlan);
+  downgradedDraft.feasibilityResult = evaluateTaskFeasibility(downgradedDraft.taskContract);
+  downgradedDraft.feasibilityResult.status = "ready";
+  downgradedDraft.feasibilityResult.degradedAccepted = true;
+  downgradedDraft.feasibilityResult.degradedPlan = degradedPlan;
+  conversation.taskCreation = {
+    status: "awaiting_publish_confirmation",
+    draft: downgradedDraft,
+  };
+  appendConversationMessage(
+    conversationId,
+    "leader",
+    `Task scope downgraded to the strongest deliverable currently supported by the team.\n\n${formatLeaderTaskDraft(downgradedDraft)}`
+  );
+  renderApp();
+}
+
+function startTeamUpdatePlaceholder(conversationId) {
+  const conversation = getConversationById(conversationId);
+  if (!conversation) return;
+
+  conversation.taskCreation = {
+    status: "team_update_required",
+    draft: conversation.taskCreation?.draft || null,
+  };
+  appendConversationMessage(
+    conversationId,
+    "leader",
+    "Team update is required before this task can run as requested. The update-team flow is not implemented yet."
+  );
   renderApp();
 }
 
@@ -2087,15 +2402,20 @@ async function watchTask(taskId) {
 }
 
 async function startBackendTask(taskInput) {
+  const draft = typeof taskInput === "string" ? buildLeaderTaskDraft(taskInput) : taskInput;
+  const userInput = draft.input || draft.taskContract?.objective || "";
   const result = await apiFetch("/tasks", {
     method: "POST",
     body: JSON.stringify({
-      userInput: taskInput,
+      title: draft.title,
+      userInput,
       priority: "medium",
+      taskContract: draft.taskContract,
+      feasibilityResult: draft.feasibilityResult,
     }),
   });
 
-  activatePendingTask(result, taskInput);
+  activatePendingTask(result, userInput);
   await watchTask(result.taskId);
 }
 
@@ -2504,9 +2824,46 @@ function renderChatComposer(formId, textareaId, placeholder, submitLabel, conver
 function renderLeaderPublishConfirmation(conversation) {
   const draft = conversation?.taskCreation?.draft;
   if (!draft || conversation?.taskCreation?.status !== "awaiting_publish_confirmation") return "";
+  const feasibility = draft.feasibilityResult || { status: "ready", available: [], partial: [], missing: [], optionalMissing: [] };
+  const feasibilityNote =
+    feasibility.status === "ready"
+      ? t("chatPanel.feasibilityReady")
+      : feasibility.status === "degraded"
+        ? t("chatPanel.feasibilityDegraded")
+        : feasibility.status === "needs_clarification"
+          ? t("chatPanel.feasibilityNeedsClarification")
+          : t("chatPanel.feasibilityBlocked");
+  const capabilityRows = [
+    ...feasibility.available.map((id) => ({ id, status: "available", label: t("chatPanel.capabilityAvailable") })),
+    ...feasibility.partial.map((id) => ({ id, status: "partial", label: t("chatPanel.capabilityPartial") })),
+    ...feasibility.missing.map((id) => ({ id, status: "missing", label: t("chatPanel.capabilityMissing") })),
+    ...feasibility.optionalMissing.map((id) => ({ id, status: "missing", label: t("chatPanel.capabilityMissing") })),
+  ];
+  const actions =
+    feasibility.status === "ready"
+      ? `
+        <button class="btn-primary" type="button" data-confirm-leader-publish="${escapeHtml(conversation.id)}">${escapeHtml(t("buttons.confirmPublish"))}</button>
+        <button class="btn-secondary" type="button" data-cancel-leader-publish="${escapeHtml(conversation.id)}">${escapeHtml(t("buttons.continueNegotiation"))}</button>
+      `
+      : feasibility.status === "degraded"
+        ? `
+        <button class="btn-primary" type="button" data-apply-degraded-task="${escapeHtml(conversation.id)}">${escapeHtml(t("buttons.useDegradedScope"))}</button>
+        <button class="btn-secondary" type="button" data-cancel-leader-publish="${escapeHtml(conversation.id)}">${escapeHtml(t("buttons.continueNegotiation"))}</button>
+        <button class="btn-secondary" type="button" data-cancel-leader-publish="${escapeHtml(conversation.id)}">${escapeHtml(t("buttons.cancel"))}</button>
+      `
+        : feasibility.status === "needs_clarification"
+          ? `
+        <button class="btn-secondary" type="button" data-cancel-leader-publish="${escapeHtml(conversation.id)}">${escapeHtml(t("buttons.continueNegotiation"))}</button>
+        <button class="btn-secondary" type="button" data-cancel-leader-publish="${escapeHtml(conversation.id)}">${escapeHtml(t("buttons.cancel"))}</button>
+      `
+          : `
+        <button class="btn-primary" type="button" data-update-team-flow="${escapeHtml(conversation.id)}">${escapeHtml(t("buttons.updateTeam"))}</button>
+        <button class="btn-secondary" type="button" data-cancel-leader-publish="${escapeHtml(conversation.id)}">${escapeHtml(t("buttons.continueNegotiation"))}</button>
+        <button class="btn-secondary" type="button" data-cancel-leader-publish="${escapeHtml(conversation.id)}">${escapeHtml(t("buttons.cancel"))}</button>
+      `;
 
   return `
-    <section class="publish-card">
+    <section class="publish-card publish-card-${escapeHtml(feasibility.status)}">
       <div>
         <p class="eyebrow">${escapeHtml(t("chatPanel.publishReady"))}</p>
         <h3>${escapeHtml(draft.title)}</h3>
@@ -2515,12 +2872,35 @@ function renderLeaderPublishConfirmation(conversation) {
       <div class="publish-scope">
         <span>${escapeHtml(draft.input)}</span>
       </div>
+      <div class="feasibility-panel">
+        <div>
+          <span class="tag accent">${escapeHtml(feasibility.status.toUpperCase())}</span>
+          <span class="tag">${escapeHtml(draft.taskContract?.artifactKind || "summary")}</span>
+          <span class="tag">${escapeHtml(draft.taskContract?.deliverables?.[0]?.format || "unspecified")}</span>
+        </div>
+        <p>${escapeHtml(feasibilityNote)}</p>
+        ${
+          feasibility.degradedPlan
+            ? `<div class="publish-scope"><span>${escapeHtml(feasibility.degradedPlan)}</span></div>`
+            : ""
+        }
+        <div class="capability-list">
+          ${capabilityRows
+            .map(
+              (capability) => `
+                <span class="capability-chip capability-${escapeHtml(capability.status)}">
+                  ${escapeHtml(capabilityLabel(capability.id))} · ${escapeHtml(capability.label)}
+                </span>
+              `
+            )
+            .join("")}
+        </div>
+      </div>
       <div class="publish-milestones">
         ${draft.milestones.map((milestone, index) => `<span>${index + 1}. ${escapeHtml(milestone)}</span>`).join("")}
       </div>
       <div class="chat-actions">
-        <button class="btn-primary" type="button" data-confirm-leader-publish="${escapeHtml(conversation.id)}">${escapeHtml(t("buttons.confirmPublish"))}</button>
-        <button class="btn-secondary" type="button" data-cancel-leader-publish="${escapeHtml(conversation.id)}">${escapeHtml(t("buttons.continueNegotiation"))}</button>
+        ${actions}
       </div>
     </section>
   `;
@@ -2699,6 +3079,16 @@ function renderModelInvocation(invocation) {
         ? `<p class="subtask-error">${escapeHtml(invocation.errorMessage)}</p>`
         : ""
     }
+    ${
+      invocation.thinkingText
+        ? `
+          <details class="thinking-trace">
+            <summary>${escapeHtml(t("stage.thinkingTrace"))} · ${escapeHtml(String(invocation.thinkingChars || invocation.thinkingText.length))} chars</summary>
+            <pre>${escapeHtml(invocation.thinkingText)}</pre>
+          </details>
+        `
+        : ""
+    }
   `;
 }
 
@@ -2806,7 +3196,7 @@ function renderTaskOverviewContent(includeStageFlow = false) {
                           <span>${escapeHtml(subtask.status)}</span>
                         </summary>
                         ${renderModelInvocation(subtask.modelInvocation)}
-                        <pre data-output-scroll-key="${escapeHtml(subtask.id)}">${escapeHtml(subtask.outputText || subtask.reviewComment || "No output yet.")}</pre>
+                        <pre data-output-scroll-key="${escapeHtml(subtask.id)}">${escapeHtml(subtask.outputText || subtask.reviewComment || subtask.modelInvocation?.partialText || "No output yet.")}</pre>
                       </details>
                     `
                   )
@@ -3588,6 +3978,8 @@ function bindStageActions() {
   const directChatForms = [...document.querySelectorAll("[data-chat-conversation-form]")];
   const confirmLeaderPublishButtons = [...document.querySelectorAll("[data-confirm-leader-publish]")];
   const cancelLeaderPublishButtons = [...document.querySelectorAll("[data-cancel-leader-publish]")];
+  const applyDegradedTaskButtons = [...document.querySelectorAll("[data-apply-degraded-task]")];
+  const updateTeamButtons = [...document.querySelectorAll("[data-update-team-flow]")];
   const retryTaskButtons = [...document.querySelectorAll("[data-retry-task]")];
   const retryFailedStepButtons = [...document.querySelectorAll("[data-retry-failed-step]")];
   const archiveTaskButtons = [...document.querySelectorAll("[data-archive-task]")];
@@ -3605,6 +3997,14 @@ function bindStageActions() {
 
   cancelLeaderPublishButtons.forEach((button) => {
     button.addEventListener("click", () => cancelLeaderTaskDraft(button.dataset.cancelLeaderPublish));
+  });
+
+  applyDegradedTaskButtons.forEach((button) => {
+    button.addEventListener("click", () => applyDegradedLeaderTaskDraft(button.dataset.applyDegradedTask));
+  });
+
+  updateTeamButtons.forEach((button) => {
+    button.addEventListener("click", () => startTeamUpdatePlaceholder(button.dataset.updateTeamFlow));
   });
 
   retryTaskButtons.forEach((button) => {

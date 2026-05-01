@@ -541,7 +541,8 @@ User opens Leader from Team
 -> Leader appears under Direct Chats like other agents
 -> User can use Send Message for natural conversation
 -> User uses Task Creation for task requirements
--> UI generates a task draft and publication confirmation card
+-> UI generates a deliverable contract and publication confirmation card
+-> Runtime checks required actions against the capability registry and local capability pool
 -> User confirms publication
 -> System publishes the main task
 -> Leader mentions Planner
@@ -629,6 +630,11 @@ Should contain:
 - backend task lifecycle logging and model invocation visibility
 - Desktop polling against backend task snapshots when the API is available
 - retry task, retry failed step, archive, and delete actions
+- static capability registry for document, spreadsheet, media, and webapp-like task classes
+- local capability pool for completed-task evidence
+- deliverable contract extraction for intent, artifact kind, format, duration/page/row hints, and required actions
+- Leader feasibility gate with `ready`, `degraded`, `blocked`, and `needs_clarification` outcomes
+- task contract and feasibility metadata persisted on backend tasks
 
 ### Not Implemented Yet
 
@@ -701,6 +707,7 @@ Current product meaning:
 
 - this is the current primary MVP
 - it is the nearest deliverable that matches the existing text-workflow strengths
+- the current team blocks full PPT delivery because `.pptx` export is not available yet
 - the missing step is moving from structured text outputs into real file deliverables
 
 #### MVP 2: WebApp Generation System
@@ -752,6 +759,7 @@ Acceptance:
 
 - legal workflow transitions are enforced
 - role outputs and failures are contract-shaped
+- Leader publication produces a deliverable contract before workflow execution
 - reviewer rejection routes back into writer revision predictably
 - common text tasks run end to end without ad hoc flow patches
 

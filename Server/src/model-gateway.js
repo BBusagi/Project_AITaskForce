@@ -273,11 +273,11 @@ async function getProviderHealth() {
   return catalog.providers;
 }
 
-async function generate(role, prompt) {
+async function generate(role, prompt, options = {}) {
   const route = resolveRoute(role);
 
   if (route.provider === "ollama") {
-    return generateWithOllama(route.model, prompt);
+    return generateWithOllama(route.model, prompt, options);
   }
 
   if (route.provider === "openai") {

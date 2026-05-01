@@ -44,6 +44,7 @@ const state = {
   events: new Map(),
   messages: new Map(),
   taskRuns: new Map(),
+  capabilityPool: [],
   nextTaskNumber: 1,
 };
 
@@ -54,6 +55,7 @@ function serializeState() {
     subtasks: Object.fromEntries(state.subtasks),
     events: Object.fromEntries(state.events),
     messages: Object.fromEntries(state.messages),
+    capabilityPool: state.capabilityPool,
   };
 }
 
@@ -66,6 +68,7 @@ function hydrateState() {
   const maxTaskNumber = snapshot.tasks.reduce((max, task) => Math.max(max, Number(task.number) || 0), 0);
 
   state.nextTaskNumber = Math.max(snapshot.nextTaskNumber, maxTaskNumber + 1, 1);
+  state.capabilityPool = Array.isArray(snapshot.capabilityPool) ? snapshot.capabilityPool : [];
 
   for (const task of snapshot.tasks) {
     state.tasks.set(task.id, task);
@@ -73,6 +76,40 @@ function hydrateState() {
     state.events.set(task.id, Array.isArray(snapshot.events[task.id]) ? snapshot.events[task.id] : []);
     state.messages.set(task.id, Array.isArray(snapshot.messages[task.id]) ? snapshot.messages[task.id] : []);
   }
+}
+
+function getCapabilityPool() {
+  return state.capabilityPool;
+}
+
+function recordCapabilityEvidence(task) {
+  if (!task?.taskContract || task.status !== "completed") return [];
+
+  const timestamp = nowIso();
+  const actionIds = Array.isArray(task.taskContract.requiredActions) ? task.taskContract.requiredActions : [];
+  const deliverableType = Array.isArray(task.taskContract.deliverables) ? task.taskContract.deliverables[0]?.type : null;
+  const recorded = [];
+
+  for (const capabilityId of actionIds) {
+    const existing = state.capabilityPool.find(
+      (entry) => entry.capabilityId === capabilityId && entry.evidenceTaskId === task.id
+    );
+    if (existing) continue;
+
+    const entry = {
+      capabilityId,
+      status: "available",
+      evidenceTaskId: task.id,
+      artifactKind: task.taskContract.artifactKind,
+      deliverableType: deliverableType || task.taskContract.artifactKind,
+      updatedAt: timestamp,
+    };
+    state.capabilityPool.push(entry);
+    recorded.push(entry);
+  }
+
+  if (recorded.length > 0) persistState();
+  return recorded;
 }
 
 function nowIso() {
@@ -102,7 +139,7 @@ function getStatusOwner(status) {
   return "leader";
 }
 
-function createTask({ title, userInput, priority = "medium", createdBy = "user" }) {
+function createTask({ title, userInput, priority = "medium", createdBy = "user", taskContract = null, feasibilityResult = null }) {
   const timestamp = nowIso();
   const taskId = newTaskId();
   const taskNumber = state.nextTaskNumber;
@@ -116,6 +153,8 @@ function createTask({ title, userInput, priority = "medium", createdBy = "user" 
     priority,
     createdBy,
     assignedLeaderId: "leader",
+    taskContract,
+    feasibilityResult,
     finalOutput: null,
     errorMessage: null,
     retryCount: 0,
@@ -321,4 +360,6 @@ module.exports = {
   buildAgentsView,
   buildSnapshot,
   buildTeamTimeline,
+  getCapabilityPool,
+  recordCapabilityEvidence,
 };
