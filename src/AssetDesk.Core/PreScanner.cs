@@ -32,14 +32,13 @@ public sealed class PreScanner
                     var dir = new DirectoryInfo(current);
                     if ((dir.Attributes & (FileAttributes.ReparsePoint | FileAttributes.Offline)) != 0) { skipped++; continue; }
                     directories++;
-                    var project = Directory.Exists(Path.Combine(current, ".git")) || File.Exists(Path.Combine(current, ".git"));
-                    foreach (var marker in new[] { "package.json", "pyproject.toml", "Cargo.toml", "go.mod" }) project |= File.Exists(Path.Combine(current, marker));
-                    if (project) projects++;
+                    var project = false;
                     foreach (var entry in dir.EnumerateFileSystemInfos())
                     {
                         token.ThrowIfCancellationRequested(); pause.Wait(token);
                         try
                         {
+                            project |= ProjectMarkers.Evidence(entry) != null;
                             if ((entry.Attributes & (FileAttributes.ReparsePoint | FileAttributes.Offline)) != 0) { skipped++; continue; }
                             if ((entry.Attributes & FileAttributes.Directory) != 0)
                             {
@@ -50,6 +49,7 @@ public sealed class PreScanner
                         }
                         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { errors++; }
                     }
+                    if (project) projects++;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { errors++; }
             }

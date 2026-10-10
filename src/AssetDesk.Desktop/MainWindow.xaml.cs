@@ -42,7 +42,7 @@ public partial class MainWindow : Window
         AppViewCombo.SelectedIndex = workspace.AppIconView ? 1 : 0;
         ShowSystemAppsBox.IsChecked = workspace.ShowSystemApps;
         if (!smoke) RefreshDisks();
-        StorageText.Text = $"索引保存在：\n{storagePath}\n\nSQLite 本地保存资产、用户分类、AI 审核结果和扫描报告。无默认遥测。";
+        StorageText.Text = $"索引保存在：\n{storagePath}\n\nSQLite 本地保存资产、用户分类、AI 审核结果和扫描报告；未变化记录不会重复写入。无默认遥测。";
         ready = true;
         Navigation.SelectedIndex = 0;
         Refresh();
@@ -125,6 +125,7 @@ public partial class MainWindow : Window
         foreach (var report in workspace.Reports.AsEnumerable().Reverse())
         {
             builder.AppendLine($"{report.Time.LocalDateTime:yyyy-MM-dd HH:mm}   ·   {report.State}\n{report.Root}\n发现 {report.Discovered:N0} 项；局部错误 {report.IssueCount} 项");
+            if (report.DurationSeconds is { } seconds) builder.AppendLine($"扫描方式：{report.Scanner}；本次范围枚举耗时 {seconds:F2} 秒（含暂停，不含合并／写库；缓存时为历史耗时）");
             if (report.Excluded.Count > 0) builder.AppendLine("排除／覆盖限制（最多显示 200 条）：\n" + string.Join("\n", report.Excluded));
             if (report.Issues.Count > 0) builder.AppendLine("错误（最多显示 200 条）：\n" + string.Join("\n", report.Issues));
             builder.AppendLine("\n─────────────────────────\n");

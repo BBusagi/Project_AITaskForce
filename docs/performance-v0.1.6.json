@@ -1,0 +1,84 @@
+{
+  "TimeUtc": "2026-10-10T10:05:47.113922+00:00",
+  "OS": "Microsoft Windows NT 10.0.26200.0",
+  "Runtime": "10.0.9",
+  "CPUs": 16,
+  "DiskFileSystem": "NTFS",
+  "AvailableMemoryBytes": 16542715904,
+  "FileCount": 10000,
+  "RecordCount": 100000,
+  "Caveat": "Local synthetic fixtures, alternating scans with warm filesystem caches; not a cold whole-PC or million-asset benchmark. Save timings include full JSON serialization/hash work. No LLM calls.",
+  "Scans": [
+    {
+      "Engine": "v0.1.5",
+      "Round": 0,
+      "Milliseconds": 1360.8109,
+      "Assets": 10200
+    },
+    {
+      "Engine": "single-pass",
+      "Round": 0,
+      "Milliseconds": 349.4079,
+      "Assets": 10200
+    },
+    {
+      "Engine": "single-pass",
+      "Round": 1,
+      "Milliseconds": 266.8143,
+      "Assets": 10200
+    },
+    {
+      "Engine": "v0.1.5",
+      "Round": 1,
+      "Milliseconds": 926.6192,
+      "Assets": 10200
+    },
+    {
+      "Engine": "v0.1.5",
+      "Round": 2,
+      "Milliseconds": 910.9395,
+      "Assets": 10200
+    },
+    {
+      "Engine": "single-pass",
+      "Round": 2,
+      "Milliseconds": 216.1096,
+      "Assets": 10200
+    }
+  ],
+  "Saves": [
+    {
+      "Operation": "initial",
+      "BaselineMilliseconds": 2019.3123,
+      "CurrentMilliseconds": 1946.845,
+      "CurrentWritten": 100001,
+      "CurrentDeleted": 0,
+      "CurrentUnchanged": 0
+    },
+    {
+      "Operation": "unchanged",
+      "BaselineMilliseconds": 2478.8977,
+      "CurrentMilliseconds": 537.6255,
+      "CurrentWritten": 0,
+      "CurrentDeleted": 0,
+      "CurrentUnchanged": 100001
+    },
+    {
+      "Operation": "settings",
+      "BaselineMilliseconds": 1521.432,
+      "CurrentMilliseconds": 424.4101,
+      "CurrentWritten": 1,
+      "CurrentDeleted": 0,
+      "CurrentUnchanged": 100000
+    },
+    {
+      "Operation": "one-tag",
+      "BaselineMilliseconds": 1675.8705,
+      "CurrentMilliseconds": 426.205,
+      "CurrentWritten": 1,
+      "CurrentDeleted": 0,
+      "CurrentUnchanged": 100000
+    }
+  ],
+  "ProcessPeakWorkingSetBytes": 280526848
+}

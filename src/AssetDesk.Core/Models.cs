@@ -46,6 +46,8 @@ public sealed class ScanReport
 {
     public string Root { get; set; } = "";
     public string State { get; set; } = "进行中";
+    public double? DurationSeconds { get; set; }
+    public string Scanner { get; set; } = "";
     public int Discovered { get; set; }
     public int IssueCount { get; set; }
     public List<string> Issues { get; set; } = [];

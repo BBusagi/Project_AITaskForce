@@ -1,5 +1,7 @@
 # AssetDesk Agent Specification
 
+v0.1.6 search engineering: scan and pre-scan discover project markers during one directory enumeration, and cache protection roots. SQLite persistence compares record fingerprints and applies transactional incremental UPSERT/deletion instead of rewriting every row. It still serializes/checks the full workspace and loads the full index; SQL paging, incremental filesystem monitoring and MFT/USN are not implemented. S0/S1 are partially implemented, with an isolated benchmark against v0.1.5; see [Performance evidence](docs/performance-v0.1.6.md). AI remains frozen.
+
 v0.1.4: opening the disk dropdown refreshes mounted disks. Pre-scan replaces Refresh Disks: it enumerates files/project markers with the scan exclusions, counts reachable objects without creating assets or saving to the database, and shows session-only results. Pause/cancel and error/skip counts are supported. Registered applications/PATH discovery are excluded from the estimate. Time is an uncalibrated 2–6x enumeration-time heuristic, not a guarantee for merging/UI/storage; partial scopes receive no total-time estimate. Normal scanning has no fixed count cap, remains subject to resources/access/exclusions, and has not been validated at million-asset scale. The new scan policy invalidates old capped cache matching while preserving historical records. The search field is visible only in directory mode; whole-PC/disk modes hide and clear it. AI remains frozen.
 
 The sidebar must contain exactly seven entries in order: Overview, AI Analysis, Scans and History, Applications, File Assets, Personal Panel, Settings. File Assets must be a dedicated entry between Applications and Personal Panel; retain the Overview shortcut. Personal Panel currently contains the developer view. AI Analysis is frozen pending user-directed redesign: preserve layout and persisted data, disable interactions and handler paths for preview, generation/cache reuse and review. Keep provider configuration available. History must be selectable read-only text with standard keyboard/context-menu copying. Normal scans have no fixed count cap; preserve old capped reports as historical partial coverage and do not reuse their old policy keys.
@@ -42,7 +44,7 @@ This repository now implements AssetDesk, a Windows personal-computer asset work
 
 ## Future development routing
 
-`docs/development-roadmap.md` is the canonical staged roadmap; `docs/product-spec-v0.1.md` separates the v0.1.5 baseline from future requirements. These are planned stages, not implemented capabilities.
+`docs/development-roadmap.md` is the canonical staged roadmap; `docs/product-spec-v0.1.md` separates the v0.1.6 baseline from future requirements. S0/S1 have partial implementations documented in the performance report; remaining capabilities are planned.
 
 - Search/scanning: S0 reproducible benchmarks -> S1 incremental merge and persistence, indexed paged queries, throttled UI and bounded pipeline -> S2 incremental updates/reconciliation/checkpoints -> S3 optional documented NTFS MFT/USN indexing with ordinary enumeration fallback.
 - AI: A0 redesign tasks, scope, preview, budgets and review while keeping the UI frozen -> A1 restore bounded validated analysis and user review after design completion -> A2 semantic dependency-aware changed-scope analysis and cost controls; A2 depends on S2.

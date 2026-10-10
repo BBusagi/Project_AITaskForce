@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace AssetDesk.Core;
 
@@ -7,6 +9,10 @@ namespace AssetDesk.Core;
 public sealed class WorkspaceStore : IDisposable
 {
     private IntPtr db;
+    private Dictionary<string, Dictionary<string, string>> persisted = [];
+    private string persistedVersion = "";
+    public SaveStatistics LastSave { get; private set; } = new(0, 0, 0);
+    public sealed record SaveStatistics(int Written, int Deleted, int Unchanged);
     public WorkspaceStore(string path)
     {
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!);
@@ -36,23 +42,75 @@ public sealed class WorkspaceStore : IDisposable
     public void Save(Workspace workspace)
     {
         Exec("BEGIN IMMEDIATE;");
+        var dataVersion = "";
+        var next = new Dictionary<string, Dictionary<string, string>>();
+        var written = 0; var deleted = 0; var unchanged = 0;
+        void Sync(string table, IEnumerable<(string Id, string Payload)> rows)
+        {
+            var previous = persisted.TryGetValue(table, out var known) ? known : ReadStoredHashes(table);
+            var current = new Dictionary<string, string>();
+            IEnumerable<(string Id, string Payload)> Changes()
+            {
+                foreach (var row in rows)
+                {
+                    var hash = Fingerprint(row.Payload);
+                    if (!current.TryAdd(row.Id, hash)) throw new InvalidDataException("重复索引身份，保存已回滚。");
+                    if (previous.TryGetValue(row.Id, out var prior) && prior == hash) unchanged++;
+                    else { written++; yield return row; }
+                }
+            }
+            // Stream changed payloads through one prepared statement instead of retaining all JSON.
+            WriteRows(table, Changes());
+            foreach (var id in previous.Keys.Where(id => !current.ContainsKey(id))) { DeleteRow(table, id); deleted++; }
+            next[table] = current;
+        }
         try
         {
-            Exec("DELETE FROM assets; DELETE FROM suggestions; DELETE FROM reports; DELETE FROM settings; DELETE FROM scan_cache; DELETE FROM analysis_cache;");
-            WriteRows("assets", workspace.Assets.Select(a => (a.Id, JsonSerializer.Serialize(a))));
-            WriteRows("suggestions", workspace.Suggestions.Select(a => (a.Id, JsonSerializer.Serialize(a))));
-            WriteRows("reports", workspace.Reports.TakeLast(100).Select((a, i) => (i.ToString(), JsonSerializer.Serialize(a))));
-            WriteRows("scan_cache", workspace.ScanCache.Select(a => (a.Key, JsonSerializer.Serialize(a))));
-            WriteRows("analysis_cache", workspace.AnalysisCache.TakeLast(200).Select(a => (a.Key, JsonSerializer.Serialize(a))));
+            dataVersion = Read("PRAGMA data_version;").Single();
+            if (dataVersion != persistedVersion) persisted.Clear();
+            Sync("assets", workspace.Assets.Select(a => (a.Id, JsonSerializer.Serialize(a))));
+            Sync("suggestions", workspace.Suggestions.Select(a => (a.Id, JsonSerializer.Serialize(a))));
+            Sync("reports", workspace.Reports.TakeLast(100).Select((a, i) => (i.ToString(), JsonSerializer.Serialize(a))));
+            Sync("scan_cache", workspace.ScanCache.Select(a => (a.Key, JsonSerializer.Serialize(a))));
+            Sync("analysis_cache", workspace.AnalysisCache.TakeLast(200).Select(a => (a.Key, JsonSerializer.Serialize(a))));
             var settings = new Workspace { Endpoint = workspace.Endpoint, Model = workspace.Model, ProviderId = workspace.ProviderId, ProviderSettings = workspace.ProviderSettings, AppIconView = workspace.AppIconView, ShowSystemApps = workspace.ShowSystemApps };
-            WriteRows("settings", [("workspace", JsonSerializer.Serialize(settings))]);
+            Sync("settings", [("workspace", JsonSerializer.Serialize(settings))]);
             Exec("COMMIT;");
+            persisted = next; persistedVersion = dataVersion; LastSave = new(written, deleted, unchanged);
         }
         catch { Exec("ROLLBACK;"); throw; }
     }
+    private static string Fingerprint(string payload) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
+    private Dictionary<string, string> ReadStoredHashes(string table)
+    {
+        Check(Native.sqlite3_prepare_v2(db, $"SELECT id,payload FROM {table};", -1, out var statement, IntPtr.Zero));
+        var rows = new Dictionary<string, string>();
+        try
+        {
+            int rc;
+            while ((rc = Native.sqlite3_step(statement)) == 100)
+            {
+                var id = Marshal.PtrToStringUTF8(Native.sqlite3_column_text(statement, 0)) ?? "";
+                rows.Add(id, Fingerprint(Marshal.PtrToStringUTF8(Native.sqlite3_column_text(statement, 1)) ?? ""));
+            }
+            if (rc != 101) Check(rc);
+            return rows;
+        }
+        finally { Native.sqlite3_finalize(statement); }
+    }
+    private void DeleteRow(string table, string id)
+    {
+        Check(Native.sqlite3_prepare_v2(db, $"DELETE FROM {table} WHERE id=?1;", -1, out var statement, IntPtr.Zero));
+        try
+        {
+            Check(Native.sqlite3_bind_text(statement, 1, id, -1, new IntPtr(-1)));
+            var rc = Native.sqlite3_step(statement); if (rc != 101) Check(rc);
+        }
+        finally { Native.sqlite3_finalize(statement); }
+    }
     private void WriteRows(string table, IEnumerable<(string Id, string Payload)> rows)
     {
-        Check(Native.sqlite3_prepare_v2(db, $"INSERT INTO {table}(id,payload) VALUES(?1,?2);", -1, out var statement, IntPtr.Zero));
+        Check(Native.sqlite3_prepare_v2(db, $"INSERT INTO {table}(id,payload) VALUES(?1,?2) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload;", -1, out var statement, IntPtr.Zero));
         try
         {
             foreach (var row in rows)

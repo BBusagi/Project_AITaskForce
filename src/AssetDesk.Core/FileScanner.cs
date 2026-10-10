@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace AssetDesk.Core;
 
 public sealed record ScanProgress(IReadOnlyList<Asset> Batch, int Count, string CurrentPath);
@@ -21,6 +23,7 @@ public sealed class FileScanner
         if (!Directory.Exists(root)) throw new DirectoryNotFoundException("扫描目录不存在。");
         if (limit.HasValue && limit.Value < 1) throw new ArgumentOutOfRangeException(nameof(limit));
         var excludedNames = new HashSet<string>(exclusions ?? DefaultExclusions, StringComparer.OrdinalIgnoreCase);
+        var watch = Stopwatch.StartNew();
         var assets = new List<Asset>();
         var batch = new List<Asset>();
         var report = new ScanReport { Root = root };
@@ -42,16 +45,13 @@ public sealed class FileScanner
                     var dir = new DirectoryInfo(current);
                     if ((dir.Attributes & FileAttributes.ReparsePoint) != 0) { if (report.Excluded.Count < 200) report.Excluded.Add($"连接／占位目录：{current}"); continue; }
                     var projectEvidence = new List<string>();
-                    if (Directory.Exists(System.IO.Path.Combine(current, ".git")) || File.Exists(System.IO.Path.Combine(current, ".git"))) projectEvidence.Add("Git 标记（未探测分支）");
-                    foreach (var marker in new[] { "package.json", "pyproject.toml", "Cargo.toml", "go.mod" })
-                        if (File.Exists(System.IO.Path.Combine(current, marker))) projectEvidence.Add(marker);
-                    if (projectEvidence.Count > 0) Add(new Asset { Name = dir.Name, Path = current, Kind = "项目", Category = "开发资产", Protection = "依赖保护", Evidence = string.Join("；", projectEvidence) });
                     foreach (var entry in dir.EnumerateFileSystemInfos())
                     {
                         token.ThrowIfCancellationRequested(); pause.Wait(token);
                         if (limit.HasValue && assets.Count >= limit.Value) { report.State = "达到数量上限（部分扫描）"; Emit(); report.Discovered = assets.Count; return new(assets, report); }
                         try
                         {
+                            if (ProjectMarkers.Evidence(entry) is { } evidence) projectEvidence.Add(evidence);
                             if ((entry.Attributes & (FileAttributes.ReparsePoint | FileAttributes.Offline)) != 0)
                             {
                                 if (report.Excluded.Count < 200) report.Excluded.Add($"连接／离线／云占位对象：{entry.FullName}");
@@ -70,12 +70,18 @@ public sealed class FileScanner
                         }
                         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { Issue($"{entry.FullName}：{ex.Message}"); }
                     }
+                    if (projectEvidence.Count > 0)
+                    {
+                        if (limit.HasValue && assets.Count >= limit.Value) { report.State = "达到数量上限（部分扫描）"; Emit(); report.Discovered = assets.Count; return new(assets, report); }
+                        Add(new Asset { Name = dir.Name, Path = current, Kind = "项目", Category = "开发资产", Protection = "依赖保护", Evidence = string.Join("；", projectEvidence) });
+                    }
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { Issue($"{current}：{ex.Message}"); }
             }
             report.State = report.IssueCount == 0 ? "已完成" : "完成（有局部错误）";
         }
         catch (OperationCanceledException) { report.State = "已取消（部分扫描）"; }
+        finally { report.DurationSeconds = watch.Elapsed.TotalSeconds; report.Scanner = "目录枚举 v3（单次枚举识别项目）"; }
         Emit(); report.Discovered = assets.Count;
         return new(assets, report);
     }
@@ -93,9 +99,12 @@ public sealed class FileScanner
         return "未知";
     }
 
-    public static bool IsProtected(string path)
+    private static readonly Lazy<string[]> ProtectionRoots = new(() => new[]
     {
-        var roots = new[] { Environment.GetFolderPath(Environment.SpecialFolder.Windows), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData) };
-        return roots.Where(r => !string.IsNullOrEmpty(r)).Any(r => path.Equals(r, StringComparison.OrdinalIgnoreCase) || path.StartsWith(r.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase));
-    }
+        Environment.GetFolderPath(Environment.SpecialFolder.Windows), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)
+    }.Where(r => !string.IsNullOrEmpty(r)).Distinct(StringComparer.OrdinalIgnoreCase).Select(r => r.TrimEnd('\\')).ToArray());
+
+    public static bool IsProtected(string path) => ProtectionRoots.Value.Any(r => path.Equals(r, StringComparison.OrdinalIgnoreCase) || path.StartsWith(r + "\\", StringComparison.OrdinalIgnoreCase));
 }

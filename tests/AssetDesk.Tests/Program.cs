@@ -341,6 +341,40 @@ Test("v2 index upgrades additively without losing existing assets, settings or d
     Assert(restored.Assets.Single().Id == asset.Id && restored.Suggestions[0].Status == "已拒绝" && restored.Model == "legacy-model" && !restored.ShowSystemApps && restored.ScanCache.Count == 0 && restored.AnalysisCache.Count == 0, "migration changed legacy data");
     migrated.Save(restored); Assert(migrated.Load().Assets.Count == 1, "migrated save failed");
 });
+Test("incremental persistence writes changes only, preserves order, clears removed records and survives rollback", () =>
+{
+    var path = Path.Combine(testRoot, "incremental.db");
+    var state = new Workspace { Assets = Enumerable.Range(0, 2000).Select(i => new Asset { Name = $"file-{i}", Path = $"demo:/{i}" }).ToList() };
+    using var database = new WorkspaceStore(path);
+    database.Save(state); Assert(database.LastSave.Written == 2001, "initial save incomplete");
+    database.Save(state); Assert(database.LastSave.Written == 0 && database.LastSave.Deleted == 0 && database.LastSave.Unchanged == 2001, "unchanged rows rewritten");
+    state.Assets[100].Tags = ["人工标签"]; database.Save(state);
+    Assert(database.LastSave.Written == 1 && database.Load().Assets[100].Tags.Single() == "人工标签", "tag update rewrote unrelated assets or changed order");
+    state.AppIconView = true; database.Save(state); Assert(database.LastSave.Written == 1, "settings rewrite assets");
+    var duplicate = state.Assets[0]; state.Assets.Add(duplicate);
+    MustReject(() => database.Save(state)); state.Assets.RemoveAt(state.Assets.Count - 1);
+    database.Save(state); Assert(database.LastSave.Written == 0 && database.Load().Assets.Count == 2000, "rollback changed persisted hashes or records");
+    state.Assets.Clear(); database.Save(state); Assert(database.LastSave.Deleted == 2000 && database.Load().Assets.Count == 0, "clear failed");
+});
+Test("incremental persistence detects other connections before skipping unchanged rows", () =>
+{
+    var path = Path.Combine(testRoot, "external-write.db"); var original = new Workspace { Assets = [new Asset { Name = "original", Path = "demo:/shared" }] };
+    using var first = new WorkspaceStore(path); first.Save(original);
+    using (var second = new WorkspaceStore(path)) { var changed = second.Load(); changed.Assets[0].Name = "external"; second.Save(changed); }
+    first.Save(original); Assert(first.LastSave.Written == 1 && first.Load().Assets[0].Name == "original", "external change was silently treated as unchanged");
+});
+await TestAsync("single enumeration recognizes Git files and all manifest evidence without treating marker directories as projects", async () =>
+{
+    var root = Path.Combine(testRoot, "markers"); Directory.CreateDirectory(root);
+    File.WriteAllText(Path.Combine(root, ".git"), "gitdir: ignored"); File.WriteAllText(Path.Combine(root, "PACKAGE.JSON"), "{}"); File.WriteAllText(Path.Combine(root, "go.mod"), "example");
+    var falseProject = Path.Combine(root, "ordinary"); Directory.CreateDirectory(Path.Combine(falseProject, "Cargo.toml"));
+    using var pause = new ManualResetEventSlim(true);
+    var result = await new FileScanner().ScanAsync(root, null, pause, CancellationToken.None);
+    var project = result.Assets.Single(a => a.Kind == "项目");
+    Assert(project.Path == root && project.Evidence.Contains("Git 标记") && project.Evidence.Contains("PACKAGE.JSON") && project.Evidence.Contains("go.mod"), "marker evidence lost");
+    var counted = await new PreScanner().CountAsync(root, pause, CancellationToken.None);
+    Assert(counted.Count == result.Assets.Count && counted.Projects == 1, "pre-scan single-pass markers differ");
+});
 Console.WriteLine($"\n{passed} checks passed. Fixtures: {testRoot}");
 }
 catch (Exception ex)
