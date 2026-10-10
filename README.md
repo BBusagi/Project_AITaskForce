@@ -2,7 +2,7 @@
 
 A Windows workspace for browsing and organizing applications and personal files. The product direction is application grouping, personal spaces and an organizing inbox, with AI proposals supporting these workflows.
 
-Current v0.1.7 provides scans, application/file/project views, manual categories and local persistence. Application library groups, general personal spaces, inbox, favorites and recent-use tracking are planned; Personal Panel currently shows developer assets. AI interactions remain frozen pending redesign.
+Current v0.1.8 provides scans, application/file/project views, manual categories and local persistence. Application library groups, general personal spaces, inbox, favorites and recent-use tracking are planned; Personal Panel currently shows developer assets. AI interactions remain frozen pending redesign.
 
 [中文说明](readme-zh.md) · [Product direction](docs/product-direction.md) · [Specification](docs/product-spec-v0.1.md) · [Roadmap](docs/development-roadmap.md) · [Implementation status](docs/implementation-v0.1.md)
 
@@ -22,18 +22,19 @@ Or:
 dotnet run --project src/AssetDesk.Desktop/AssetDesk.Desktop.csproj
 ```
 
-The portable build in `artifacts/release-v0.1.7/AssetDesk.exe` requires the .NET 10 Desktop Runtime. Build it with:
+The portable build in `artifacts/release-v0.1.8/AssetDesk.exe` requires the .NET 10 Desktop Runtime. Build it with:
 
 ```powershell
-dotnet publish src/AssetDesk.Desktop/AssetDesk.Desktop.csproj -c Release -o artifacts/release-v0.1.7 --self-contained false
+dotnet publish src/AssetDesk.Desktop/AssetDesk.Desktop.csproj -c Release -o artifacts/release-v0.1.8 --self-contained false
 ```
 
 ## First workflow
 
-1. Choose Whole PC or a disk in the scan scope dropdown, then Scan (Prefer Cache). The existing directory picker remains available. You can also load explicitly labeled demo assets.
+1. Choose Whole PC or a disk in the scan scope dropdown, then Scan (Prefer Cache). The existing directory picker remains available.
 2. Browse files, applications and the developer panel. Filter by name, path, category or tags. Applications supports list/icon views and a Show System-related Apps checkbox; preferences survive restart.
 3. Open file assets from Overview; edit categories and tags manually. Scan history supports text selection and copying.
-4. AI Analysis retains its interface and history but is temporarily frozen pending redesign. The underlying AI/cache implementation remains available for future reactivation.
+4. Select one application to open/copy its live registered installation location, start a supported registered uninstaller after confirmation, or open Windows Installed Apps. Missing locations/commands are explained; launching an uninstaller does not prove completion.
+5. AI Analysis retains its interface and history but is temporarily frozen pending redesign. The underlying AI/cache implementation remains available for future reactivation.
 
 ## AI settings
 
@@ -61,7 +62,8 @@ This is snapshot reuse, not automatic incremental monitoring. Disk changes becom
 - App icons come from local registered icon resources when available, otherwise placeholders. System-related flags use SystemComponent, update ReleaseType or a Windows installation directory, independently of user labels and protection. Ordinary Microsoft applications and Program Files are not automatically classified as OS components. Old records need application rediscovery to populate these fields. Hiding changes only the view.
 - Project discovery uses Git and common manifest markers. It does not yet validate repository branches, parse dependencies or execute scripts.
 - Re-scans preserve manual classifications. Old entries remain historical discoveries; absence is not interpreted as deletion. Clearing the index does not delete original files.
-- No delete, move, uninstall, file-body analysis, automatic elevation or default telemetry.
+- No automatic uninstall, file deletion/movement, file-body analysis or default telemetry. Manual uninstall launches the registered local EXE or normalized MSI product removal after confirmation; unsupported, quiet, system-related or NoRemove commands fall back to Windows Installed Apps. AssetDesk does not elevate itself; an installer may request Windows UAC.
+- Demonstration data/loading are removed. Opening an old index transactionally removes marked demo assets, their proposals and related caches; real assets and decisions are preserved. InstallLocation is an additive JSON field under schema v3, defaulting to empty for old records; actions re-read live registration, so existing indexes need no full-disk rescan.
 
 This is a functional v0.1 prototype, not the entire planned specification. Store/MSIX discovery, crash checkpoint recovery, file identity tracking, live incremental monitoring, deep environment analysis and performance targets are not implemented or verified yet.
 
@@ -73,7 +75,7 @@ dotnet build src/AssetDesk.Desktop/AssetDesk.Desktop.csproj -c Release
 dotnet src/AssetDesk.Desktop/bin/Release/net10.0-windows/AssetDesk.dll --smoke artifacts/overview.png
 ```
 
-33 checks cover scanning, review, API adapters and UI preference persistence, plus scan cache enumeration avoidance/refresh, analysis HTTP avoidance across restart, cache invalidation, accepted/rejected reuse, stale preview/proposal rejection, failed-response exclusion and v2 migration. Offscreen UI checks verify application views and cached AI/clear-cache behavior using demo assets. No real full-disk scan, API credentials or model quality were tested.
+40 checks cover scanning, review, API/cache adapters, incremental persistence, transactional legacy-demo cleanup, local location resolution and uninstall-plan validation. Offscreen checks use an empty index to verify navigation, application view modes, selectable history, AI freezing and disabled management controls without a selection. No real uninstaller was launched, user directories scanned or model calls made by this validation.
 
 ## Future development
 

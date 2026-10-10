@@ -31,7 +31,7 @@ public sealed record CachedAnalysisResult(AiResponse Response, bool FromCache, D
 public static class ResultCache
 {
     public const string FilePolicy = "metadata-scan-v3;cap=none;";
-    public const string DiscoveryPolicy = "registry-path-discovery-v2";
+    public const string DiscoveryPolicy = "registry-path-discovery-v3;installation-location";
     public const string DiscoveryRoot = "应用注册信息与 PATH 环境";
     // Bump this when prompt/schema/request defaults or interpretation changes.
     public const string AnalysisPolicy = "metadata-advice-v1;output=4096;";

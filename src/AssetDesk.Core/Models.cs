@@ -16,7 +16,11 @@ public sealed class Asset
     public DateTimeOffset? Modified { get; set; }
     public List<string> Tags { get; set; } = [];
     public bool UserClassified { get; set; }
+    // Retained only for cleanup of records saved by older clients.
     public bool IsDemo { get; set; }
+    // Omit absent locations to avoid rewriting every old file record when saving settings.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? InstallLocation { get; set; }
     public bool IsSystemRelated { get; set; }
     public string SystemReason { get; set; } = "";
     public string IconPath { get; set; } = "";

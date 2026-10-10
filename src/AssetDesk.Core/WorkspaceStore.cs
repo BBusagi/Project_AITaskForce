@@ -37,6 +37,25 @@ public sealed class WorkspaceStore : IDisposable
         workspace.Reports = Read("SELECT payload FROM reports ORDER BY rowid;").Select(p => JsonSerializer.Deserialize<ScanReport>(p) ?? throw new InvalidDataException("扫描记录无效。")).ToList();
         workspace.ScanCache = Read("SELECT payload FROM scan_cache ORDER BY rowid;").Select(p => JsonSerializer.Deserialize<ScanSnapshot>(p) ?? throw new InvalidDataException("扫描缓存无效。")).ToList();
         workspace.AnalysisCache = Read("SELECT payload FROM analysis_cache ORDER BY rowid;").Select(p => JsonSerializer.Deserialize<AnalysisSnapshot>(p) ?? throw new InvalidDataException("分析缓存无效。")).ToList();
+        var cleanup = LegacyDemoCleanup.Remove(workspace);
+        if (cleanup.Changed)
+        {
+            Exec("BEGIN IMMEDIATE;");
+            try
+            {
+                foreach (var id in cleanup.Assets) DeleteRow("assets", id);
+                foreach (var id in cleanup.Suggestions) DeleteRow("suggestions", id);
+                foreach (var id in cleanup.ScanCaches) DeleteRow("scan_cache", id);
+                foreach (var id in cleanup.AnalysisCaches) DeleteRow("analysis_cache", id);
+                if (cleanup.ReportsChanged)
+                {
+                    Exec("DELETE FROM reports;");
+                    WriteRows("reports", workspace.Reports.Select((r, i) => (i.ToString(), JsonSerializer.Serialize(r))));
+                }
+                Exec("COMMIT;"); persisted.Clear(); persistedVersion = "";
+            }
+            catch { Exec("ROLLBACK;"); throw; }
+        }
         return workspace;
     }
     public void Save(Workspace workspace)

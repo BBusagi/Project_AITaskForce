@@ -23,7 +23,7 @@ public partial class App : Application
             MainWindow = window;
             if (smoke)
             {
-                window.LoadDemoForSmoke();
+                window.PrepareSmoke();
                 window.Width = 1380; window.Height = 900;
                 var content = (FrameworkElement)window.Content;
                 window.Content = null;

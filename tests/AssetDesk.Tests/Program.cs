@@ -223,12 +223,13 @@ Test("registered icon parsing handles quoted paths, commas and resource indexes"
 });
 Test("application evidence and view preferences survive index restore and review", () =>
 {
-    var app = new Asset { Name = "fixture system", Kind = "应用", Path = "registry:fixture", IsSystemRelated = true, SystemReason = "SystemComponent=1", IconPath = @"C:\fixture\app.exe", IconIndex = -2, Protection = "应用保护" };
+    var app = new Asset { Name = "fixture system", Kind = "应用", Path = "registry:fixture", InstallLocation = fixture, IsSystemRelated = true, SystemReason = "SystemComponent=1", IconPath = @"C:\fixture\app.exe", IconIndex = -2, Protection = "应用保护" };
     var prefs = new Workspace { Assets = [app], AppIconView = true, ShowSystemApps = false };
     var suggestion = new Suggestion { AssetId = app.Id, Category = "工作工具" }; ReviewService.Accept(prefs, suggestion);
     using var store = new WorkspaceStore(Path.Combine(testRoot, "app-prefs.db")); store.Save(prefs); var restored = store.Load();
     Assert(restored.AppIconView && !restored.ShowSystemApps && restored.Assets[0].IsSystemRelated && restored.Assets[0].IconIndex == -2 && restored.Assets[0].SystemReason == app.SystemReason, "app evidence or prefs lost");
-    Assert(restored.Assets[0].Protection == "应用保护", "review changed protection");
+    Assert(restored.Assets[0].Protection == "应用保护" && restored.Assets[0].InstallLocation == fixture, "review changed protection or installation location lost");
+    Assert(JsonSerializer.Deserialize<Asset>("{}")!.InstallLocation == null && !JsonSerializer.Serialize(new Asset()).Contains("InstallLocation"), "absent location rewrites unrelated old file records");
     var old = JsonSerializer.Deserialize<Workspace>("{}")!; Assert(old.ShowSystemApps && !old.AppIconView, "legacy preferences changed");
 });
 await TestAsync("scan cache bypasses enumeration, survives restore and supports forced refresh", async () =>
@@ -344,7 +345,7 @@ Test("v2 index upgrades additively without losing existing assets, settings or d
 Test("incremental persistence writes changes only, preserves order, clears removed records and survives rollback", () =>
 {
     var path = Path.Combine(testRoot, "incremental.db");
-    var state = new Workspace { Assets = Enumerable.Range(0, 2000).Select(i => new Asset { Name = $"file-{i}", Path = $"demo:/{i}" }).ToList() };
+    var state = new Workspace { Assets = Enumerable.Range(0, 2000).Select(i => new Asset { Name = $"file-{i}", Path = $"fixture:/{i}" }).ToList() };
     using var database = new WorkspaceStore(path);
     database.Save(state); Assert(database.LastSave.Written == 2001, "initial save incomplete");
     database.Save(state); Assert(database.LastSave.Written == 0 && database.LastSave.Deleted == 0 && database.LastSave.Unchanged == 2001, "unchanged rows rewritten");
@@ -358,7 +359,7 @@ Test("incremental persistence writes changes only, preserves order, clears remov
 });
 Test("incremental persistence detects other connections before skipping unchanged rows", () =>
 {
-    var path = Path.Combine(testRoot, "external-write.db"); var original = new Workspace { Assets = [new Asset { Name = "original", Path = "demo:/shared" }] };
+    var path = Path.Combine(testRoot, "external-write.db"); var original = new Workspace { Assets = [new Asset { Name = "original", Path = "fixture:/shared" }] };
     using var first = new WorkspaceStore(path); first.Save(original);
     using (var second = new WorkspaceStore(path)) { var changed = second.Load(); changed.Assets[0].Name = "external"; second.Save(changed); }
     first.Save(original); Assert(first.LastSave.Written == 1 && first.Load().Assets[0].Name == "original", "external change was silently treated as unchanged");
@@ -375,6 +376,65 @@ await TestAsync("single enumeration recognizes Git files and all manifest eviden
     var counted = await new PreScanner().CountAsync(root, pause, CancellationToken.None);
     Assert(counted.Count == result.Assets.Count && counted.Projects == 1, "pre-scan single-pass markers differ");
 });
+Test("legacy demonstration cleanup is transactional and preserves real assets, decisions and settings", () =>
+{
+    var real = new Asset { Name = "[示例] 用户真实文件", Path = Path.Combine(fixture, "notes.md"), Category = "人工分类", Tags = ["保留"], UserClassified = true };
+    var demo = new Asset { Name = "legacy", Path = "demo:/old", IsDemo = true };
+    var realSuggestion = new Suggestion { AssetId = real.Id, Status = "已拒绝", Model = "user-selected-model" };
+    var state = new Workspace { Assets = [real, demo], Suggestions = [realSuggestion, new Suggestion { AssetId = demo.Id }, new Suggestion { Model = "示例提案（非 AI 推理）" }], AppIconView = true };
+    state.ScanCache.Add(new() { Key = "real-scan", AssetIds = [real.Id] });
+    state.ScanCache.Add(new() { Key = "demo-scan", AssetIds = [demo.Id] });
+    state.AnalysisCache.Add(new() { Key = "real-analysis", Request = AiAdvisor.CreateContext("test", [real]) });
+    state.AnalysisCache.Add(new() { Key = "demo-analysis", Request = AiAdvisor.CreateContext("test", [demo]) });
+    state.Reports = [new() { Root = fixture }, new() { Root = "demo:/disk" }];
+    var path = Path.Combine(testRoot, "demo-cleanup.db");
+    using (var database = new WorkspaceStore(path)) database.Save(state);
+    using (var database = new WorkspaceStore(path))
+    {
+        var cleaned = database.Load();
+        Assert(cleaned.Assets.Single().Id == real.Id && cleaned.Assets[0].UserClassified && cleaned.Assets[0].Tags.Single() == "保留", "real decisions removed");
+        Assert(cleaned.Suggestions.Single().Id == realSuggestion.Id && cleaned.Suggestions[0].Status == "已拒绝", "real review removed");
+        Assert(cleaned.ScanCache.Single().Key == "real-scan" && cleaned.AnalysisCache.Single().Key == "real-analysis" && cleaned.Reports.Single().Root == fixture && cleaned.AppIconView, "unrelated caches or settings removed");
+        Assert(!LegacyDemoCleanup.Remove(cleaned).Changed, "cleanup not idempotent");
+        database.Save(cleaned); Assert(database.LastSave.Written == 0 && database.LastSave.Deleted == 0, "cleanup did not persist targeted removals");
+    }
+    using var reopened = new WorkspaceStore(path); Assert(reopened.Load().Assets.Single().Id == real.Id, "removed data returned after restart");
+});
+Test("application and file location resolve real local targets without launching programs", () =>
+{
+    var appDirectory = Path.Combine(testRoot, "App With Spaces"); Directory.CreateDirectory(appDirectory);
+    var executable = Path.Combine(appDirectory, "uninstall.exe"); File.WriteAllText(executable, "fixture - never executable");
+    var app = new Asset { Kind = "应用", Path = "registry:CurrentUser/Registry64/fixture" };
+    var registration = new RegisteredApplication(app.Path, "fixture", appDirectory, executable, "\"" + executable + "\" /uninstall", false, false);
+    Assert(ApplicationManagement.ResolveLocation(app, registration) is { Source: "注册安装位置", SelectFile: false } location && location.Path == appDirectory, "registry identity used as location");
+    var fallback = ApplicationManagement.ResolveLocation(app, registration with { InstallLocation = Path.Combine(appDirectory, "missing") });
+    Assert(fallback.Path == appDirectory && fallback.Source.Contains("候选"), "executable location fallback lost evidence");
+    var file = ApplicationManagement.ResolveLocation(new Asset { Path = Path.Combine(fixture, "notes.md") });
+    Assert(file.SelectFile && file.Path.EndsWith("notes.md"), "file not selected in parent folder");
+    var directory = ApplicationManagement.ResolveLocation(new Asset { Kind = "项目", Path = fixture });
+    Assert(!directory.SelectFile && directory.Path == fixture, "project directory misresolved");
+    MustReject(() => ApplicationManagement.LocalPath("https://example.com/app"));
+    MustReject(() => ApplicationManagement.LocalPath(@"\\server\share\app.exe"));
+    MustReject(() => ApplicationManagement.LocalPath(@"C:\app.exe:stream"));
+    MustReject(() => ApplicationManagement.ReadRegistration(new Asset { Kind = "应用", Path = "registry:ClassesRoot/Registry64/x" }));
+    Assert(File.ReadAllText(executable) == "fixture - never executable", "fixture program changed");
+});
+Test("registered uninstall plans normalize MSI and reject missing, quiet, script or ambiguous commands", () =>
+{
+    var appDirectory = Path.Combine(testRoot, "App With Spaces"); var executable = Path.Combine(appDirectory, "uninstall.exe");
+    var registration = new RegisteredApplication("registry:CurrentUser/Registry64/fixture", "fixture", appDirectory, executable, "\"" + executable + "\" /uninstall", false, false);
+    var plan = ApplicationManagement.BuildUninstallPlan(registration);
+    Assert(plan.CanLaunch && plan.Executable == executable && plan.Arguments == "/uninstall", "valid quoted exe rejected");
+    Assert(!ApplicationManagement.BuildUninstallPlan(registration with { NoRemove = true }).CanLaunch, "NoRemove ignored");
+    Assert(!ApplicationManagement.BuildUninstallPlan(registration with { SystemRelated = true }).CanLaunch, "system flag ignored");
+    foreach (var command in new[] { "", executable + " /uninstall", "\"" + executable + "\" /S", "\"" + executable + "\" /quiet", "cmd.exe /c do-not-run", "relative.exe /uninstall", "https://example.com/remove.exe", "\"" + Path.Combine(appDirectory, "missing.exe") + "\"", "\"" + executable + "\"\n/uninstall" })
+        Assert(!ApplicationManagement.BuildUninstallPlan(registration with { UninstallString = command }).CanLaunch, "unsafe or unsupported command accepted: " + command);
+    var code = "{01234567-89AB-CDEF-0123-456789ABCDEF}";
+    var msi = ApplicationManagement.BuildUninstallPlan(registration with { UninstallString = "MsiExec.exe /I" + code });
+    Assert(msi.CanLaunch && msi.Executable == Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "msiexec.exe") && msi.Arguments == "/x " + code.ToLowerInvariant() + " /norestart", "MSI /I not normalized to interactive uninstall");
+    Assert(!ApplicationManagement.BuildUninstallPlan(registration with { UninstallString = "msiexec.exe /x" + code + " /qn" }).CanLaunch, "complex MSI executed");
+});
+
 Console.WriteLine($"\n{passed} checks passed. Fixtures: {testRoot}");
 }
 catch (Exception ex)

@@ -20,9 +20,12 @@ public partial class MainWindow : Window
     private readonly string storagePath;
     private CancellationTokenSource? scanCancellation;
     private CancellationTokenSource? aiCancellation;
-    private Task? scanOperation, aiOperation, saveOperation;
-    private bool scanning, analyzing, saving, closing, closeReady, ready;
-    private bool Busy => scanning || analyzing || saving || closing;
+    private Task? scanOperation, aiOperation, saveOperation, managementOperation;
+    private bool scanning, analyzing, saving, managing, closing, closeReady, ready;
+    private bool Busy => scanning || analyzing || saving || managing || closing;
+    private RegisteredApplication? detailRegistration;
+    private AssetLocation? detailLocation;
+    private int detailRevision;
     private AiContext? context;
     private List<Asset> filteredAssets = [];
     private int page;
@@ -148,7 +151,7 @@ public partial class MainWindow : Window
     }
     private void UpdateActions()
     {
-        ScanButton.IsEnabled = DiscoverButton.IsEnabled = DemoButton.IsEnabled = ClearButton.IsEnabled = SaveTagButton.IsEnabled = SaveSettingsButton.IsEnabled = ConnectButton.IsEnabled = !Busy;
+        ScanButton.IsEnabled = DiscoverButton.IsEnabled = ClearButton.IsEnabled = SaveTagButton.IsEnabled = SaveSettingsButton.IsEnabled = ConnectButton.IsEnabled = !Busy;
         AcceptButton.IsEnabled = RejectButton.IsEnabled = !AiFrozen && !Busy;
         PauseButton.IsEnabled = scanCancellation != null && !closing;
         CancelButton.IsEnabled = (scanCancellation != null || analyzing) && !closing;
@@ -157,6 +160,11 @@ public partial class MainWindow : Window
         ForceScanBox.IsEnabled = !Busy; ForceAnalysisBox.IsEnabled = !AiFrozen && !Busy;
         ClearCacheButton.IsEnabled = !Busy;
         ScanModeCombo.IsEnabled = DiskCombo.IsEnabled = PreScanButton.IsEnabled = AppViewCombo.IsEnabled = ShowSystemAppsBox.IsEnabled = !Busy;
+        var single = selectedAssets.Count == 1;
+        SaveTagButton.IsEnabled = !Busy && selectedAssets.Count > 0;
+        LocateButton.IsEnabled = CopyLocationButton.IsEnabled = !Busy && single && detailLocation != null;
+        UninstallButton.IsEnabled = !Busy && single && detailRegistration != null;
+        WindowsAppsButton.IsEnabled = !Busy && single && selectedAssets[0].Kind == "应用";
     }
     private void InvalidateContext()
     {
@@ -406,13 +414,38 @@ public partial class MainWindow : Window
         InvalidateContext();
         UpdateDetail();
     }
-    private void UpdateDetail()
+    private async void UpdateDetail()
     {
+        var revision = ++detailRevision;
+        detailRegistration = null; detailLocation = null;
+        var isApp = page == 3 || selectedAssets.LastOrDefault()?.Kind == "应用";
+        UninstallButton.Visibility = WindowsAppsButton.Visibility = isApp ? Visibility.Visible : Visibility.Collapsed;
+        LocateButton.Content = isApp ? "打开安装位置" : "定位原始文件";
+        ManagementHint.Text = ""; UpdateActions();
         if (selectedAssets.LastOrDefault() is not Asset asset) { DetailName.Text = "选择一个资产"; DetailPath.Text = DetailEvidence.Text = DetailProtection.Text = ManualCategory.Text = ManualTags.Text = ""; return; }
         DetailName.Text = asset.Name; DetailPath.Text = asset.Path;
         DetailEvidence.Text = $"{asset.Evidence}\n版本：{asset.Version}\n最近修改：{asset.Modified?.LocalDateTime.ToString("yyyy-MM-dd HH:mm") ?? "未知"}";
         DetailProtection.Text = $"保护状态：{asset.Protection}";
         ManualCategory.Text = asset.Category; ManualTags.Text = string.Join(", ", asset.Tags);
+        if (selectedAssets.Count != 1) { ManagementHint.Text = "打开位置或卸载时请选择一个对象。"; return; }
+        try
+        {
+            var registration = await Task.Run(() => isApp ? ApplicationManagement.ReadRegistration(asset) : null);
+            if (revision != detailRevision || closing) return;
+            detailRegistration = registration;
+            if (registration != null)
+            {
+                var plan = await Task.Run(() => ApplicationManagement.BuildUninstallPlan(registration));
+                if (revision != detailRevision || closing) return;
+                ManagementHint.Text = plan.CanLaunch ? "卸载将启动已注册程序，完成状态由卸载程序决定。" : plan.FallbackReason;
+            }
+            var location = await Task.Run(() => ApplicationManagement.ResolveLocation(asset, registration));
+            if (revision != detailRevision || closing) return;
+            detailLocation = location; DetailPath.Text = location.Path;
+            ManagementHint.Text = location.Source + (registration == null ? "" : "\n注册来源：" + asset.Path + "\n" + ManagementHint.Text);
+        }
+        catch (Exception ex) { if (revision == detailRevision && !closing) ManagementHint.Text = ex.Message + (isApp ? "\n可打开 Windows 已安装应用。" : ""); }
+        finally { if (revision == detailRevision && !closing) UpdateActions(); }
     }
     private async void SaveTags_Click(object sender, RoutedEventArgs e)
     {
@@ -423,18 +456,71 @@ public partial class MainWindow : Window
         try { asset.Category = category; asset.Tags = tags; asset.UserClassified = true; InvalidateContext(); await PersistAsync(); Refresh(); StatusText.Text = "人工分类已保存；原始文件未改变。"; }
         catch (Exception ex) { ShowError(ex); }
     }
-    private void Locate_Click(object sender, RoutedEventArgs e)
+    private async void Locate_Click(object sender, RoutedEventArgs e)
     {
-        if (selectedAssets.LastOrDefault() is not Asset asset) return;
+        if (Busy || selectedAssets.Count != 1) return;
+        managementOperation = LocateAsync(selectedAssets[0]); await managementOperation;
+    }
+    private async Task LocateAsync(Asset asset)
+    {
+        managing = true; UpdateActions();
         try
         {
-            if (asset.IsDemo || asset.Path.StartsWith("registry:", StringComparison.Ordinal)) { StatusText.Text = "示例或注册表来源没有可定位的磁盘目录。"; return; }
-            var directory = asset.Kind == "项目" ? asset.Path : Path.GetDirectoryName(asset.Path);
-            if (directory == null || !Directory.Exists(directory)) throw new DirectoryNotFoundException("目录已不存在或离线，请重新扫描。");
-            var start = new ProcessStartInfo("explorer.exe") { UseShellExecute = false };
-            start.ArgumentList.Add(directory); Process.Start(start);
+            var location = await Task.Run(() => ApplicationManagement.ResolveLocation(asset, asset.Kind == "应用" ? ApplicationManagement.ReadRegistration(asset) : null));
+            if (closing) return;
+            var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe")) { UseShellExecute = false };
+            if (location.SelectFile) start.Arguments = "/select,\"" + location.Path + "\"";
+            else start.ArgumentList.Add(location.Path);
+            using var process = Process.Start(start);
+            StatusText.Text = "已打开：" + location.Path + " · " + location.Source;
         }
         catch (Exception ex) { ShowError(ex); }
+        finally { managing = false; UpdateActions(); }
+    }
+    private void CopyLocation_Click(object sender, RoutedEventArgs e)
+    {
+        if (Busy || selectedAssets.Count != 1 || detailLocation == null) return;
+        try { Clipboard.SetText(detailLocation.Path); StatusText.Text = "位置已复制。"; } catch (Exception ex) { ShowError(ex); }
+    }
+    private void WindowsApps_Click(object sender, RoutedEventArgs e)
+    {
+        if (Busy || selectedAssets.Count != 1 || selectedAssets[0].Kind != "应用") return;
+        try { OpenWindowsApps(); } catch (Exception ex) { ShowError(ex); }
+    }
+    private void OpenWindowsApps()
+    {
+        using var process = Process.Start(new ProcessStartInfo("ms-settings:appsfeatures") { UseShellExecute = true });
+        StatusText.Text = "已打开 Windows 已安装应用；在系统界面选择应用进行管理。";
+    }
+    private async void Uninstall_Click(object sender, RoutedEventArgs e)
+    {
+        if (Busy || selectedAssets.Count != 1 || selectedAssets[0].Kind != "应用") return;
+        managementOperation = UninstallAsync(selectedAssets[0]); await managementOperation;
+    }
+    private async Task UninstallAsync(Asset asset)
+    {
+        managing = true; UpdateActions();
+        try
+        {
+            var registration = await Task.Run(() => ApplicationManagement.ReadRegistration(asset));
+            var plan = await Task.Run(() => ApplicationManagement.BuildUninstallPlan(registration));
+            if (closing) return;
+            if (!plan.CanLaunch)
+            {
+                if (MessageBox.Show(this, registration.Name + "\n" + plan.FallbackReason + "\n\n打开 Windows 已安装应用？", "应用管理", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes) OpenWindowsApps();
+                return;
+            }
+            var message = $"启动 {registration.Name} 的卸载程序？\n\n程序：{plan.Executable}\n参数：{plan.Arguments}\n来源：{registration.Identity}\n\n卸载可能移除应用及其数据，具体操作由卸载程序处理。";
+            if (MessageBox.Show(this, message, "卸载应用", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+            var current = await Task.Run(() => ApplicationManagement.ReadRegistration(asset));
+            var currentPlan = await Task.Run(() => ApplicationManagement.BuildUninstallPlan(current));
+            if (closing) return;
+            if (current != registration || currentPlan != plan) throw new InvalidOperationException("应用注册信息在确认期间改变，请重新检查后操作。");
+            using var process = Process.Start(new ProcessStartInfo(plan.Executable) { Arguments = plan.Arguments, UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(plan.Executable)! });
+            StatusText.Text = "已启动卸载程序；未核实卸载是否完成。完成后请刷新应用清单。";
+        }
+        catch (Exception ex) { ShowError(ex); }
+        finally { managing = false; UpdateActions(); UpdateDetail(); }
     }
     private async void SaveSettings_Click(object sender, RoutedEventArgs e)
     {
@@ -526,105 +612,30 @@ public partial class MainWindow : Window
         try { workspace.ScanCache.Clear(); workspace.AnalysisCache.Clear(); InvalidateContext(); await PersistAsync(); Refresh(); StatusText.Text = "扫描与分析缓存已清除；资产索引、人工标签及审核记录保留。下次检索／分析将重新执行。"; }
         catch (Exception ex) { ShowError(ex); }
     }
-    private async void Demo_Click(object sender, RoutedEventArgs e)
+    public void PrepareSmoke()
     {
-        if (Busy) return;
-        try { AddDemo(); await PersistAsync(); Refresh(); StatusText.Text = "示例数据已载入，不代表本机扫描结果。AI 分析已暂停。"; }
-        catch (Exception ex) { ShowError(ex); }
-    }
-    private void AddDemo()
-    {
-        if (workspace.Assets.Any(a => a.IsDemo)) return;
-        workspace.Assets.AddRange(new[]
-        {
-            new Asset { Name = "[示例] 旅行照片.jpg", Path = "demo:/pictures/旅行照片.jpg", Category = "图像", Size = 4200000, IsDemo = true, Evidence = "虚拟示例元数据" },
-            new Asset { Name = "[示例] Screenshot-2026.png", Path = "demo:/pictures/Screenshot-2026.png", Category = "截图候选", Size = 1800000, IsDemo = true, Evidence = "命名规则；内容未经检查" },
-            new Asset { Name = "[示例] 需求说明.pdf", Path = "demo:/documents/需求说明.pdf", Category = "文档", Size = 890000, IsDemo = true, Evidence = "虚拟示例元数据" },
-            new Asset { Name = "[示例] python-notes", Path = "demo:/projects/python-notes", Kind = "项目", Category = "开发资产", Protection = "依赖保护", IsDemo = true, Evidence = "pyproject.toml；Git 标记（示例）" },
-            new Asset { Name = "[示例] Python", Path = "demo:/tools/python", Kind = "环境", Category = "开发资产", Protection = "依赖保护", Version = "3.12（示例）", IsDemo = true, Evidence = "虚拟示例，不代表本机版本" },
-            new Asset { Name = "[示例] 图像编辑器", Path = "demo:/apps/editor", Kind = "应用", Category = "应用程序", Protection = "应用保护", Version = "2.0（示例）", IsDemo = true, Evidence = "示例应用；图标不可用时显示占位图" },
-            new Asset { Name = "[示例] 开发工具", Path = "demo:/apps/dev", Kind = "应用", Category = "应用程序", Protection = "应用保护", Version = "1.0（示例）", IsDemo = true, Evidence = "虚拟应用，不代表本机软件" },
-            new Asset { Name = "[示例] 系统更新组件", Path = "demo:/apps/system", Kind = "应用", Category = "应用程序", Protection = "应用保护", IsSystemRelated = true, SystemReason = "示例 SystemComponent=1", Version = "10.0（示例）", IsDemo = true, Evidence = "虚拟系统相关应用，用于体验显示／隐藏" },
-            new Asset { Name = "[示例] 安装包.zip", Path = "demo:/downloads/安装包.zip", Category = "压缩包", Size = 126000000, IsDemo = true, Evidence = "仅凭名称无法判断是否还需要" }
-        });
-        foreach (var asset in workspace.Assets.Where(a => a.IsDemo && a.Kind is "文件" or "项目").Take(3))
-            workspace.Suggestions.Add(new Suggestion { AssetId = asset.Id, AssetName = asset.Name, Category = asset.Category == "文档" ? "工作参考" : "个人资料", Tags = ["示例分组", "待用户确认"], Reason = "这是用于体验审核流程的示例提案，非模型输出；真实文件内容未经检查。", Model = "示例提案（非 AI 推理）" });
-        AiSummary.Text = "当前显示示例建议，非模型输出。AI 分析和建议审核已暂停。";
-        InvalidateContext();
-    }
-    public void LoadDemoForSmoke()
-    {
-        AddDemo(); Refresh();
+        if (workspace.Assets.Count != 0 || workspace.Suggestions.Count != 0 || FindName("DemoButton") != null)
+            throw new InvalidOperationException("空索引或示例入口检查失败。");
         var smokePage = Environment.GetEnvironmentVariable("ASSETDESK_SMOKE_PAGE");
+        Navigation.SelectedIndex = smokePage switch { "ai" or "ai-cache" => 1, "history" => 2, "apps" or "apps-list" => 3, "files" => 4, "settings" => 6, _ => 0 };
         if (smokePage is "ai" or "ai-cache")
         {
-            Navigation.SelectedIndex = 1;
-            var count = workspace.Suggestions.Count;
-            Preview_Click(this, new RoutedEventArgs());
-            Analyze_Click(this, new RoutedEventArgs());
-            SuggestionGrid.SelectedItem = workspace.Suggestions.First();
+            Preview_Click(this, new RoutedEventArgs()); Analyze_Click(this, new RoutedEventArgs());
             Accept_Click(this, new RoutedEventArgs()); Reject_Click(this, new RoutedEventArgs());
-            if (AiPanel.IsEnabled || AnalyzeButton.IsEnabled || context != null || workspace.Suggestions.Count != count || workspace.Suggestions.Any(s => s.Status != "待审核") || workspace.AnalysisCache.Count != 0)
-                throw new InvalidOperationException("AI 冻结未阻止预览、分析或审核。");
+            if (AiPanel.IsEnabled || AnalyzeButton.IsEnabled || context != null || workspace.Suggestions.Count != 0)
+                throw new InvalidOperationException("AI 冻结检查失败。");
         }
-        else if (smokePage == "history")
+        if (smokePage == "history")
         {
-            workspace.Reports.Add(new ScanReport { Root = "demo:/disk", State = "达到数量上限（部分扫描）", Discovered = 100000 });
-            Refresh(); Navigation.SelectedIndex = 2;
             HistoryText.SelectAll();
-            if (!HistoryText.IsReadOnly || HistoryText.SelectedText != HistoryText.Text || !HistoryText.Text.Contains("部分扫描") || Navigation.Items.Count != 7 || HistoryPanel.Visibility != Visibility.Visible)
-                throw new InvalidOperationException("记录不可选中或导航顺序错误。");
+            if (!HistoryText.IsReadOnly || HistoryText.SelectedText != HistoryText.Text || Navigation.Items.Count != 7)
+                throw new InvalidOperationException("记录选择或导航检查失败。");
             HistoryText.Select(0, 0);
-            GoFiles_Click(this, new RoutedEventArgs());
-            if (AssetsPanel.Visibility != Visibility.Visible || filteredAssets.Any(a => a.Kind != "文件")) throw new InvalidOperationException("文件资产入口错误。");
-            Navigation.SelectedIndex = 6;
-            if (SettingsPanel.Visibility != Visibility.Visible) throw new InvalidOperationException("设置入口错误。");
-            Navigation.SelectedIndex = 2;
         }
-        else if (smokePage == "files")
-        {
-            GoFiles_Click(this, new RoutedEventArgs());
-            if (Navigation.SelectedIndex != 4 || AssetsPanel.Visibility != Visibility.Visible || filteredAssets.Count == 0 || filteredAssets.Any(a => a.Kind != "文件")) throw new InvalidOperationException("文件导航或筛选错误。");
-            AssetGrid.SelectedItem = filteredAssets.First();
-            if (selectedAssets.Count != 1 || DetailName.Text != filteredAssets.First().Name) throw new InvalidOperationException("文件详情选择错误。");
-            Navigation.SelectedIndex = 5;
-            if (filteredAssets.Count == 0 || filteredAssets.Any(a => a.Kind is not ("项目" or "环境"))) throw new InvalidOperationException("个人化面板路由错误。");
-            Navigation.SelectedIndex = 6;
-            if (SettingsPanel.Visibility != Visibility.Visible) throw new InvalidOperationException("设置路由错误。");
-            GoFiles_Click(this, new RoutedEventArgs());
-        }
-        else if (smokePage == "settings") { Navigation.SelectedIndex = 6; ProviderCombo.SelectedValue = "openai"; }
-        else if (smokePage is "apps" or "apps-list")
-        {
-            var resourceIcon = new Asset { IconPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "shell32.dll") };
-            if (new AppIconConverter().Convert(resourceIcon, typeof(System.Windows.Media.ImageSource), null!, System.Globalization.CultureInfo.InvariantCulture) == null) throw new InvalidOperationException("本地图标资源读取失败。");
-            if (new AppIconConverter().Convert(new Asset { IconPath = @"\\invalid-server\app.exe" }, typeof(System.Windows.Media.ImageSource), null!, System.Globalization.CultureInfo.InvariantCulture) != null) throw new InvalidOperationException("读取了远程图标。");
-            // UI interaction assertions use demo assets and no model/PC scan.
-            Navigation.SelectedIndex = 3;
-            var ordinary = filteredAssets.First(a => !a.IsSystemRelated);
-            AssetGrid.SelectedItem = ordinary;
-            AppViewCombo.SelectedIndex = 1;
-            if (AppIconList.SelectedItems.Count != 1 || selectedAssets.Single().Id != ordinary.Id) throw new InvalidOperationException("视图切换丢失选择。");
-            ShowSystemAppsBox.IsChecked = false;
-            if (filteredAssets.Any(a => a.IsSystemRelated) || filteredAssets.Count != 2) throw new InvalidOperationException("系统相关筛选失败。");
-            ShowSystemAppsBox.IsChecked = true;
-            if (filteredAssets.Count != 3) throw new InvalidOperationException("恢复显示失败。");
-            var system = filteredAssets.Single(a => a.IsSystemRelated);
-            AppIconList.SelectedItems.Clear(); AppIconList.SelectedItem = system;
-            ShowSystemAppsBox.IsChecked = false;
-            if (selectedAssets.Count != 0) throw new InvalidOperationException("隐藏应用仍被选中。");
-            ShowSystemAppsBox.IsChecked = true;
-            AppIconList.SelectedItem = ordinary;
-            GoAi_Click(this, new RoutedEventArgs()); Preview_Click(this, new RoutedEventArgs());
-            if (context != null || selectedAssets.Single().Id != ordinary.Id) throw new InvalidOperationException("冻结 AI 或图标选择范围错误。");
-            Navigation.SelectedIndex = 3;
-            if (smokePage == "apps-list") AppViewCombo.SelectedIndex = 0;
-            ScanModeCombo.SelectedIndex = 2;
-            if (SearchBox.Visibility != Visibility.Visible) throw new InvalidOperationException("指定模式未显示检索框。");
-            SearchBox.Text = "不存在的筛选"; ScanModeCombo.SelectedIndex = 1;
-            if (SearchBox.Visibility != Visibility.Collapsed || SearchBox.Text.Length != 0) throw new InvalidOperationException("磁盘模式保留隐藏筛选。");
-            DiskCombo.ItemsSource = new[] { new DiskScope(@"C:\", "C:\\  系统磁盘（示例）", true, ""), new DiskScope(@"D:\", "D:\\  数据磁盘（示例）", true, "") }; DiskCombo.SelectedIndex = 1;
-        }
+        if (smokePage is "apps" or "apps-list") AppViewCombo.SelectedIndex = smokePage == "apps" ? 1 : 0;
+        if (smokePage == "settings") ProviderCombo.SelectedValue = "openai";
+        if (LocateButton.IsEnabled || CopyLocationButton.IsEnabled || UninstallButton.IsEnabled)
+            throw new InvalidOperationException("无选择时管理操作仍可用。");
     }
     public void DisposeForSmoke() { store?.Dispose(); http.Dispose(); pause.Dispose(); }
     private async void Window_Closing(object? sender, CancelEventArgs e)
@@ -633,7 +644,7 @@ public partial class MainWindow : Window
         e.Cancel = true;
         if (closing) return;
         closing = true; UpdateActions(); scanCancellation?.Cancel(); aiCancellation?.Cancel(); pause.Set();
-        try { await Task.WhenAll(new[] { scanOperation, aiOperation, saveOperation }.Where(t => t != null).Cast<Task>()); }
+        try { await Task.WhenAll(new[] { scanOperation, aiOperation, saveOperation, managementOperation }.Where(t => t != null).Cast<Task>()); }
         catch { /* Individual operations already show errors. */ }
         finally { store?.Dispose(); http.Dispose(); pause.Dispose(); closeReady = true; Close(); }
     }

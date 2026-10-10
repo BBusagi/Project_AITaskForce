@@ -31,7 +31,7 @@ public sealed class WindowsDiscovery
                         var identity = $"registry:{hive}/{view}/{name}";
                         var systemReason = ApplicationMetadata.SystemReason(app?.GetValue("SystemComponent"), app?.GetValue("ReleaseType") as string, location, Environment.GetFolderPath(Environment.SpecialFolder.Windows));
                         var icon = ApplicationMetadata.ParseIcon(app?.GetValue("DisplayIcon") as string);
-                        assets.Add(new Asset { Name = display, Path = identity, Kind = "应用", Category = "应用程序", Protection = "应用保护", IsSystemRelated = systemReason.Length > 0, SystemReason = systemReason, IconPath = icon.Path, IconIndex = icon.Index, Version = app?.GetValue("DisplayVersion") as string ?? "未知", Evidence = $"卸载注册信息 {hive}/{view}；发布者（未验证）：{app?.GetValue("Publisher") ?? "未知"}；安装位置：{location}；系统相关依据：{(systemReason.Length > 0 ? systemReason : "未识别（不代表可删除）")}" });
+                        assets.Add(new Asset { Name = display, Path = identity, InstallLocation = location, Kind = "应用", Category = "应用程序", Protection = "应用保护", IsSystemRelated = systemReason.Length > 0, SystemReason = systemReason, IconPath = icon.Path, IconIndex = icon.Index, Version = app?.GetValue("DisplayVersion") as string ?? "未知", Evidence = $"卸载注册信息 {hive}/{view}；发布者（未验证）：{app?.GetValue("Publisher") ?? "未知"}；安装位置：{location}；系统相关依据：{(systemReason.Length > 0 ? systemReason : "未识别（不代表可删除）")}" });
                     }
                     catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException) { AddIssue(report, $"注册信息 {name}：{ex.Message}"); }
                 }
