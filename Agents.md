@@ -55,6 +55,8 @@ Current v0.1.7 implements navigation/copy changes only; application library grou
 
 ## Future development routing
 
+The A0 draft in `docs/local-analysis-design.md` specifies local registration/structured evidence -> rules -> bounded group summaries -> unresolved-object queue -> budgeted AI proposals -> user review. This is design only. Keep facts, rule candidates, AI candidates and user decisions separate; sampling does not prove each member's content. A configurable $10 task target must expose unfinished coverage. Basic reservation/usage/retry accounting is an A1 activation prerequisite; automatic dependency updates remain A2/S2. Current 40-item batches and 200-entry caches do not implement this pipeline or a hard cost ceiling. Content/OCR and real filesystem operations remain separately scoped.
+
 `docs/development-roadmap.md` is the canonical staged roadmap; `docs/product-spec-v0.1.md` separates the v0.1.7 baseline from future requirements. S0/S1 have partial implementations documented in the performance report; remaining capabilities are planned.
 
 - Search/scanning: S0 reproducible benchmarks -> S1 incremental merge and persistence, indexed paged queries, throttled UI and bounded pipeline -> S2 incremental updates/reconciliation/checkpoints -> S3 optional documented NTFS MFT/USN indexing with ordinary enumeration fallback.

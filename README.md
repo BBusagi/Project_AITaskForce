@@ -6,6 +6,8 @@ Current v0.1.7 provides scans, application/file/project views, manual categories
 
 [中文说明](readme-zh.md) · [Product direction](docs/product-direction.md) · [Specification](docs/product-spec-v0.1.md) · [Roadmap](docs/development-roadmap.md) · [Implementation status](docs/implementation-v0.1.md)
 
+Planned AI redesign: [Local evidence and AI analysis draft](docs/local-analysis-design.md) combines registration/structured metadata, rules and bounded group summaries before sending unresolved objects to a model. A configurable $10 task budget is a target, not guaranteed full coverage. The pipeline and budget accounting are not implemented; AI remains frozen.
+
 ## Run
 
 Requires Windows and .NET SDK 10.0.301 or a later .NET 10 feature band with Windows desktop support.
