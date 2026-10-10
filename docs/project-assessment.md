@@ -124,3 +124,7 @@ WSL／容器、正文／OCR、重复项哈希、真实文件整理与恶意软�
 - 持续变更发现：[NTFS change journals](https://learn.microsoft.com/en-us/windows/win32/fileio/change-journals)。作为后续优化，并非跨文件系统通用方案。
 - 目录监听会丢失事件：[FileSystemWatcher 缓冲溢出](https://learn.microsoft.com/en-us/dotnet/api/system.io.internalbufferoverflowexception)。需用重扫补偿，不能当唯一事实来源。
 - 仓库路径与工作树确认：[git rev-parse](https://git-scm.com/docs/git-rev-parse)。发现目录标记后仍需验证仓库类型。
+
+## 产品方向调整（v0.1.7）
+
+定位从资产清单与批次标签扩展为应用、个人资料的持续组织层；当前资产索引是基础，不等于整洁体验交付。产品主线为应用分组、个人空间、待整理区与场景化 AI，详细定义见 [产品方向](product-direction.md)。查找时间、归位完成率与持续维护负担纳入后续验收；本次尚未验证这些用户指标。实际磁盘归档另行设计，不能混同索引归类。

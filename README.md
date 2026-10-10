@@ -1,14 +1,10 @@
 # AssetDesk
 
-v0.1.6 search engineering: scan and pre-scan discover project markers during one directory enumeration, and cache protection roots. SQLite persistence compares record fingerprints and applies transactional incremental UPSERT/deletion instead of rewriting every row. It still serializes/checks the full workspace and loads the full index; SQL paging, incremental filesystem monitoring and MFT/USN are not implemented. S0/S1 are partially implemented, with an isolated benchmark against v0.1.5; see [Performance evidence](docs/performance-v0.1.6.md). AI remains frozen.
+A Windows workspace for browsing and organizing applications and personal files. The product direction is application grouping, personal spaces and an organizing inbox, with AI proposals supporting these workflows.
 
-v0.1.4: opening the disk dropdown refreshes mounted disks. Pre-scan replaces Refresh Disks: it enumerates files/project markers with the scan exclusions, counts reachable objects without creating assets or saving to the database, and shows session-only results. Pause/cancel and error/skip counts are supported. Registered applications/PATH discovery are excluded from the estimate. Time is an uncalibrated 2–6x enumeration-time heuristic, not a guarantee for merging/UI/storage; partial scopes receive no total-time estimate. Normal scanning has no fixed count cap, remains subject to resources/access/exclusions, and has not been validated at million-asset scale. The new scan policy invalidates old capped cache matching while preserving historical records. The search field is visible only in directory mode; whole-PC/disk modes hide and clear it. AI remains frozen.
+Current v0.1.7 provides scans, application/file/project views, manual categories and local persistence. Application library groups, general personal spaces, inbox, favorites and recent-use tracking are planned; Personal Panel currently shows developer assets. AI interactions remain frozen pending redesign.
 
-The sidebar now has seven entries in this order: Overview, AI Analysis, Scans and History, Applications, File Assets, Personal Panel (developer view), Settings. File Assets is a dedicated sidebar entry between Applications and Personal Panel; Overview also links to it. AI Analysis is temporarily frozen pending redesign: its layout and stored data remain, but preview, analysis (including cache reuse), selection reactions and acceptance/rejection are disabled. Provider settings remain available. Scan history is a read-only selectable text box supporting Ctrl+A, Ctrl+C and the standard copy menu. The former capped reports remain historical; current scans use an uncapped policy.
-
-A Windows desktop workspace for understanding and organizing files, applications, development tools, and local projects, with AI assistance and user-reviewed classifications.
-
-[中文说明](readme-zh.md) · [Assessment](docs/project-assessment.md) · [Specification](docs/product-spec-v0.1.md) · [Implementation status](docs/implementation-v0.1.md)
+[中文说明](readme-zh.md) · [Product direction](docs/product-direction.md) · [Specification](docs/product-spec-v0.1.md) · [Roadmap](docs/development-roadmap.md) · [Implementation status](docs/implementation-v0.1.md)
 
 ## Run
 
@@ -24,10 +20,10 @@ Or:
 dotnet run --project src/AssetDesk.Desktop/AssetDesk.Desktop.csproj
 ```
 
-The portable build in `artifacts/release-v0.1.6/AssetDesk.exe` requires the .NET 10 Desktop Runtime. Build it with:
+The portable build in `artifacts/release-v0.1.7/AssetDesk.exe` requires the .NET 10 Desktop Runtime. Build it with:
 
 ```powershell
-dotnet publish src/AssetDesk.Desktop/AssetDesk.Desktop.csproj -c Release -o artifacts/release-v0.1.6 --self-contained false
+dotnet publish src/AssetDesk.Desktop/AssetDesk.Desktop.csproj -c Release -o artifacts/release-v0.1.7 --self-contained false
 ```
 
 ## First workflow

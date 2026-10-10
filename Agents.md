@@ -8,6 +8,17 @@ The sidebar must contain exactly seven entries in order: Overview, AI Analysis, 
 
 This repository now implements AssetDesk, a Windows personal-computer asset workspace. The previous AI Task Force repository was cleared at the user's request. Do not restore its multi-agent task product model.
 
+## Product direction
+
+AssetDesk is a Windows organization layer for applications and personal material. The primary product path is R0 direction and neutral copy -> R1 application grouping and personal spaces -> R2 evidence-based organizing inbox and continuous maintenance -> R3 scenario-based AI proposals -> R4 separately designed personal-file filing. See `docs/product-direction.md` for scope, dependencies and product acceptance.
+
+Current v0.1.7 implements navigation/copy changes only; application library grouping, general spaces, inbox, favorites and recent-use tracking are not yet implemented. Keep the seven-entry sidebar. Evolve organization within existing pages; do not add fake actionable placeholders or present future features as current. Personal Panel currently retains project/environment content. AI stays frozen.
+
+- Scanner throughput and object counts are supporting metrics. Evaluate finding, assigning and maintaining personal material, not only exhaustive inventories.
+- Distinguish indexed organization from actual disk operations. Space/category changes do not move files. Acknowledging this product direction does not authorize moving user files.
+- Separate asset identity, category, tags, space membership and inbox state. Unknown category is not evidence of trash or a user action requirement.
+- Use concrete function/status/source/action copy; remove slogans, anthropomorphic promises and repeated "you decide" language. Keep permission/upload information at the relevant action.
+
 ## Product contract
 
 - AI assistance and user-reviewed organization are central to the product.
@@ -44,7 +55,7 @@ This repository now implements AssetDesk, a Windows personal-computer asset work
 
 ## Future development routing
 
-`docs/development-roadmap.md` is the canonical staged roadmap; `docs/product-spec-v0.1.md` separates the v0.1.6 baseline from future requirements. S0/S1 have partial implementations documented in the performance report; remaining capabilities are planned.
+`docs/development-roadmap.md` is the canonical staged roadmap; `docs/product-spec-v0.1.md` separates the v0.1.7 baseline from future requirements. S0/S1 have partial implementations documented in the performance report; remaining capabilities are planned.
 
 - Search/scanning: S0 reproducible benchmarks -> S1 incremental merge and persistence, indexed paged queries, throttled UI and bounded pipeline -> S2 incremental updates/reconciliation/checkpoints -> S3 optional documented NTFS MFT/USN indexing with ordinary enumeration fallback.
 - AI: A0 redesign tasks, scope, preview, budgets and review while keeping the UI frozen -> A1 restore bounded validated analysis and user review after design completion -> A2 semantic dependency-aware changed-scope analysis and cost controls; A2 depends on S2.

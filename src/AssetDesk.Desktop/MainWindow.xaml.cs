@@ -53,6 +53,9 @@ public partial class MainWindow : Window
         if (!ready) return;
         ShowPage(Navigation.SelectedIndex switch { 4 => 6, 5 => 4, 6 => 5, var index => index });
     }
+    private void GoApps_Click(object sender, RoutedEventArgs e) => Navigation.SelectedIndex = 3;
+    private void GoPersonal_Click(object sender, RoutedEventArgs e) => Navigation.SelectedIndex = 5;
+    private void GoHistory_Click(object sender, RoutedEventArgs e) => Navigation.SelectedIndex = 2;
     private void GoFiles_Click(object sender, RoutedEventArgs e) { Navigation.SelectedIndex = 4; }
     private void ShowPage(int selectedPage)
     {
@@ -63,8 +66,8 @@ public partial class MainWindow : Window
         AssetsPanel.Visibility = page is 6 or 3 or 4 ? Visibility.Visible : Visibility.Collapsed;
         HistoryPanel.Visibility = page == 2 ? Visibility.Visible : Visibility.Collapsed;
         SettingsPanel.Visibility = page == 5 ? Visibility.Visible : Visibility.Collapsed;
-        var titles = new[] { "总览", "AI 分析（AI 整理助手）", "扫描与记录", "应用清单", "个人化面板（开发者面板）", "设置", "文件资产" };
-        var subtitles = new[] { "浏览电脑资产，建立清晰的分类。", "暂时冻结 · 保留结构与 UI，暂停交互、模型请求及审核，等待功能重新设计。", "扫描范围、排除项和失败原因保持可见；记录可选择与复制。", "当前用户与机器卸载注册信息；覆盖限制可查看。", "项目标记与 PATH 环境候选，不执行项目和工具。", "AI 服务连接、索引位置与隐私边界。", "跨目录虚拟分类，原始文件保留在原位置。" };
+        var titles = new[] { "总览", "AI 分析（AI 整理助手）", "扫描与记录", "应用清单", "个人化面板", "设置", "文件资产" };
+        var subtitles = new[] { "已索引的应用、文件、项目和环境。", "暂时冻结 · 保留结构与 UI，暂停交互、模型请求及审核，等待功能重新设计。", "扫描范围、排除项和失败原因保持可见；记录可选择与复制。", "当前用户与机器卸载注册信息；覆盖限制可查看。", "当前显示项目与开发环境及其发现来源。", "连接配置、缓存和本地索引。", "跨目录虚拟分类，原始文件保留在原位置。" };
         PageTitle.Text = titles[page]; PageSubtitle.Text = subtitles[page];
         RefreshAssets();
     }
@@ -101,7 +104,7 @@ public partial class MainWindow : Window
             UpdateDetail();
         }
         var hidden = page == 3 ? workspace.Assets.Count(a => a.Kind == "应用" && a.IsSystemRelated && Matches(a) && !workspace.ShowSystemApps) : 0;
-        ListHint.Text = $"{filteredAssets.Count:N0} 个匹配对象" + (hidden > 0 ? $" · 已隐藏 {hidden} 个系统相关应用" : "") + " · Ctrl / Shift 多选，AI 分析暂时冻结。历史发现未自动核实是否仍存在。";
+        ListHint.Text = $"{filteredAssets.Count:N0} 个匹配对象" + (hidden > 0 ? $" · 已隐藏 {hidden} 个系统相关应用" : "") + " · Ctrl / Shift 多选。历史记录尚未核实是否仍存在。";
     }
     private async void AppView_Changed(object sender, RoutedEventArgs e)
     {
@@ -116,7 +119,9 @@ public partial class MainWindow : Window
         AssetCount.Text = workspace.Assets.Count.ToString("N0");
         SizeCount.Text = Asset.FormatSize(workspace.Assets.Where(a => a.Kind == "文件").Sum(a => a.Size));
         ProjectCount.Text = $"{workspace.Assets.Count(a => a.Kind == "项目")} / {workspace.Assets.Count(a => a.Kind == "环境")}";
-        PendingCount.Text = workspace.Suggestions.Count(s => s.Status == "待审核").ToString();
+        AppCount.Text = workspace.Assets.Count(a => a.Kind == "应用").ToString("N0");
+        var lastScan = workspace.Reports.LastOrDefault();
+        OverviewIndexHint.Text = $"类别未知：{workspace.Assets.Count(a => a.Category == "未知"):N0}\n扫描快照：{workspace.ScanCache.Count:N0} 个\n" + (lastScan == null ? "尚无扫描记录。" : $"最近扫描：{lastScan.Time.LocalDateTime:yyyy-MM-dd HH:mm}\n状态：{lastScan.State}") + "\n\n缓存不会自动检查磁盘变化；需要更新时使用强制刷新。";
         CategoryList.ItemsSource = workspace.Assets.GroupBy(a => a.Category).OrderByDescending(g => g.Count()).Take(8).Select(g => $"{g.Key}   ·   {g.Count():N0} 个").ToArray();
         SuggestionGrid.ItemsSource = workspace.Suggestions.AsEnumerable().Reverse().ToList();
         var active = workspace.ActiveConfig();
@@ -524,7 +529,7 @@ public partial class MainWindow : Window
     private async void Demo_Click(object sender, RoutedEventArgs e)
     {
         if (Busy) return;
-        try { AddDemo(); await PersistAsync(); Refresh(); StatusText.Text = "已载入带 [示例] 标记的虚拟资产，不代表扫描了电脑。可送入真实 AI 分析。"; }
+        try { AddDemo(); await PersistAsync(); Refresh(); StatusText.Text = "示例数据已载入，不代表本机扫描结果。AI 分析已暂停。"; }
         catch (Exception ex) { ShowError(ex); }
     }
     private void AddDemo()
@@ -544,7 +549,7 @@ public partial class MainWindow : Window
         });
         foreach (var asset in workspace.Assets.Where(a => a.IsDemo && a.Kind is "文件" or "项目").Take(3))
             workspace.Suggestions.Add(new Suggestion { AssetId = asset.Id, AssetName = asset.Name, Category = asset.Category == "文档" ? "工作参考" : "个人资料", Tags = ["示例分组", "待用户确认"], Reason = "这是用于体验审核流程的示例提案，非模型输出；真实文件内容未经检查。", Model = "示例提案（非 AI 推理）" });
-        AiSummary.Text = "当前为示例提案（非真实模型输出）。你可以体验接受／拒绝流程，或配置 AI 服务生成实际建议。";
+        AiSummary.Text = "当前显示示例建议，非模型输出。AI 分析和建议审核已暂停。";
         InvalidateContext();
     }
     public void LoadDemoForSmoke()
